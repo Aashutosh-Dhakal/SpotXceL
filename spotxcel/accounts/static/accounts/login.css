@@ -1,112 +1,12 @@
-/* Reset and Base Styles */
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
+/* Login Page Specific Styles */
 
-body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    background-color: #F3F4F6;
-    color: #1F2937;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-}
-
-/* Navbar */
-.navbar {
-    background-color: #1F2937;
-    padding: 1rem 1.5rem;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-.nav-container {
-    max-width: 1280px;
-    margin: 0 auto;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.nav-left {
-    display: flex;
-    align-items: center;
-    gap: 2rem;
-}
-
-.logo {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: white;
-    text-decoration: none;
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-}
-
-.logo-accent {
-    color: #F26522;
-}
-
-.nav-links {
-    display: flex;
-    gap: 1.5rem;
-}
-
-.nav-links a {
-    color: #D1D5DB;
-    text-decoration: none;
-    font-size: 0.875rem;
-    font-weight: 500;
-    transition: color 0.2s;
-}
-
-.nav-links a:hover {
-    color: white;
-}
-
-.nav-right {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-}
-
-.nav-link {
-    color: #D1D5DB;
-    text-decoration: none;
-    font-size: 0.875rem;
-    font-weight: 500;
-    transition: color 0.2s;
-}
-
-.nav-link:hover {
-    color: white;
-}
-
-.btn-primary {
-    background-color: #F26522;
-    color: white;
-    padding: 0.5rem 1.25rem;
-    border-radius: 0.375rem;
-    text-decoration: none;
-    font-size: 0.875rem;
-    font-weight: 600;
-    transition: background-color 0.2s;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-}
-
-.btn-primary:hover {
-    background-color: #d95213;
-}
-
-/* Main Content */
-.main-content {
+/* Auth Container */
+.auth-container {
     flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 1rem;
+    padding: 2rem 1rem;
 }
 
 .login-card {

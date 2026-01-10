@@ -1,0 +1,114 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block extra_css %}
+<link href="{% static 'core/home.css' %}" rel="stylesheet"/>
+{% endblock %}
+
+{% block content %}
+<section class="hero-section">
+    <h1 class="hero-title">
+        Welcome to <span class="text-primary">SpotXceL</span>
+    </h1>
+    <p class="hero-subtitle">
+        AI-Powered Smart Parking Management System
+    </p>
+    <div class="separator-gradient"></div>
+    <p class="hero-description">
+        Transform your parking experience with cutting-edge AI technology. SpotXceL leverages computer vision and YOLOv11 models to provide intelligent, automated parking management solutions for modern urban areas.
+    </p>
+    <div class="hero-cta">
+        <a href="{% if request.session.user_id %}{% url 'dashboard' %}{% else %}{% url 'login' %}{% endif %}" class="btn-cta">
+            <i class="fas fa-car"></i>
+            Check Availability
+        </a>
+    </div>
+</section>
+
+<section class="status-section">
+    <div class="section-container">
+        <div class="status-header">
+            <h2 class="section-title">
+                <span class="status-indicator"></span>
+                Live Status Overview
+            </h2>
+            <span class="last-updated">Last updated: Just now</span>
+        </div>
+        <div class="stats-grid">
+            <div class="stat-card available">
+                <div class="stat-content">
+                    <p class="stat-label">Available Spots</p>
+                    <p class="stat-value">0</p>
+                </div>
+                <div class="stat-icon green">
+                    <i class="fas fa-parking"></i>
+                </div>
+            </div>
+            <div class="stat-card occupied">
+                <div class="stat-content">
+                    <p class="stat-label">Occupied</p>
+                    <p class="stat-value">0</p>
+                </div>
+                <div class="stat-icon red">
+                    <i class="fas fa-car-crash"></i>
+                </div>
+            </div>
+            <div class="stat-card total">
+                <div class="stat-content">
+                    <p class="stat-label">Total Capacity</p>
+                    <p class="stat-value">0</p>
+                </div>
+                <div class="stat-icon blue">
+                    <i class="fas fa-building"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="features-section">
+    <h2 class="sr-only">System Features</h2>
+    <div class="features-grid">
+        <div class="feature-card">
+            <div class="feature-icon-wrapper">
+                <i class="fas fa-parking feature-icon"></i>
+            </div>
+            <h3 class="feature-title">Real-Time Slot Detection</h3>
+            <p class="feature-description">
+                Instantly detect occupied and available parking slots with AI-powered computer vision.
+            </p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon-wrapper">
+                <i class="fas fa-car feature-icon"></i>
+            </div>
+            <h3 class="feature-title">Vehicle Tracking</h3>
+            <p class="feature-description">
+                Automated vehicle tracking with number plate recognition for seamless entry and exit.
+            </p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon-wrapper">
+                <i class="fas fa-exclamation-triangle feature-icon"></i>
+            </div>
+            <h3 class="feature-title">Collision Detection</h3>
+            <p class="feature-description">
+                Advanced AI monitors and records vehicle collisions to enhance safety.
+            </p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon-wrapper">
+                <i class="fas fa-calculator feature-icon"></i>
+            </div>
+            <h3 class="feature-title">Auto Fee Calculation</h3>
+            <p class="feature-description">
+                Automatic parking fee computation based on duration for hassle-free payments.
+            </p>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'core/home.js' %}"></script>
+{% endblock %}
