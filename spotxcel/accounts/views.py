@@ -112,7 +112,12 @@ def login(request):
                 request.session['role'] = user.role
                 
                 messages.success(request, f'Welcome back, {user.username}!')
-                return redirect('dashboard')  # Redirect to dashboard
+                
+                # Redirect based on role
+                if user.role == 'admin':
+                    return redirect('parking_monitoring')  # Admin goes to Parking Lot Monitoring
+                else:
+                    return redirect('dashboard')  # Regular users go to dashboard
             else:
                 messages.error(request, 'Invalid password.')
                 return render(request, 'accounts/login.html')
@@ -129,6 +134,10 @@ def dashboard(request):
     if 'user_id' not in request.session:
         messages.warning(request, 'Please login to access the dashboard.')
         return redirect('login')
+    
+    # Redirect admins to parking monitoring
+    if request.session.get('role') == 'admin':
+        return redirect('parking_monitoring')
     
     # Get user data from session
     context = {

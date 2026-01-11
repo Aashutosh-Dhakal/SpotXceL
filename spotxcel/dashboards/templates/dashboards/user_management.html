@@ -1,0 +1,317 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block title %}User Management - SpotXceL{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'dashboards/user_management.css' %}">
+{% endblock %}
+
+{% block content %}
+    <div class="container">
+        <!-- Navigation Tabs -->
+        <div class="nav-tabs">
+            <a href="{% url 'parking_monitoring' %}" class="nav-tab">
+                <i class="fas fa-camera"></i>
+                <span>Parking Lot Monitoring</span>
+            </a>
+            <a href="{% url 'user_management' %}" class="nav-tab active">
+                <i class="fas fa-users"></i>
+                <span>User Management System</span>
+            </a>
+            <a href="{% url 'parking_records' %}" class="nav-tab">
+                <i class="fas fa-clock"></i>
+                <span>Parking Records/History</span>
+            </a>
+        </div>
+
+        <!-- Header Section -->
+        <div class="page-header">
+            <div>
+                <h1>User Management System</h1>
+                <p>Manage system administrators and drivers, update roles, and handle account access.</p>
+            </div>
+            <button class="btn-add-user">
+                <i class="fas fa-user-plus"></i>
+                Add New User
+            </button>
+        </div>
+
+        <!-- Filter Section -->
+        <div class="filter-card">
+            <div class="filter-grid">
+                <div class="filter-item search-item">
+                    <label for="search-user">Search User</label>
+                    <div class="input-with-icon">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="search-user" placeholder="Name, email, or phone...">
+                    </div>
+                </div>
+                <div class="filter-item">
+                    <label for="role-filter">Role</label>
+                    <div class="input-with-icon">
+                        <i class="fas fa-user-shield"></i>
+                        <select id="role-filter">
+                            <option>All Roles</option>
+                            <option>Admin</option>
+                            <option>Driver</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="filter-actions">
+                    <button class="btn-filter">
+                        <i class="fas fa-filter"></i>
+                        Filter
+                    </button>
+                    <button class="btn-clear">Clear</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Users Table -->
+        <div class="table-card">
+            <div class="table-wrapper">
+                <table class="users-table">
+                    <thead>
+                        <tr>
+                            <th>User Profile</th>
+                            <th>Contact Info</th>
+                            <th>Assigned Role</th>
+                            <th>Status</th>
+                            <th class="text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- User 1 -->
+                        <tr>
+                            <td>
+                                <div class="user-profile">
+                                    <div class="avatar avatar-orange">JD</div>
+                                    <div class="user-details">
+                                        <div class="user-name">John Doe</div>
+                                        <div class="user-id">ID: USR-2024-001</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="contact-info">
+                                    <div class="contact-primary">john.doe@spotxcel.com</div>
+                                    <div class="contact-secondary">+1 (555) 123-4567</div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge badge-admin">Admin</span>
+                            </td>
+                            <td>
+                                <div class="status-indicator">
+                                    <span class="status-dot status-active"></span>
+                                    <span>Active</span>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="action-buttons">
+                                    <button class="action-btn" title="View Profile">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button class="action-btn" title="Edit Role">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="action-btn action-delete" title="Delete User">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+
+                        <!-- User 2 -->
+                        <tr>
+                            <td>
+                                <div class="user-profile">
+                                    <div class="avatar avatar-blue">AS</div>
+                                    <div class="user-details">
+                                        <div class="user-name">Alice Smith</div>
+                                        <div class="user-id">ID: USR-2024-042</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="contact-info">
+                                    <div class="contact-primary">alice.smith@example.com</div>
+                                    <div class="contact-secondary">+1 (555) 987-6543</div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge badge-driver">Driver</span>
+                            </td>
+                            <td>
+                                <div class="status-indicator">
+                                    <span class="status-dot status-active"></span>
+                                    <span>Active</span>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="action-buttons">
+                                    <button class="action-btn" title="View Profile">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button class="action-btn" title="Edit Role">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="action-btn action-delete" title="Delete User">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+
+                        <!-- User 3 -->
+                        <tr>
+                            <td>
+                                <div class="user-profile">
+                                    <div class="avatar avatar-green">MJ</div>
+                                    <div class="user-details">
+                                        <div class="user-name">Michael Johnson</div>
+                                        <div class="user-id">ID: USR-2024-089</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="contact-info">
+                                    <div class="contact-primary">m.johnson@logistics.net</div>
+                                    <div class="contact-secondary">+1 (555) 456-7890</div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge badge-driver">Driver</span>
+                            </td>
+                            <td>
+                                <div class="status-indicator">
+                                    <span class="status-dot status-active"></span>
+                                    <span>Active</span>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="action-buttons">
+                                    <button class="action-btn" title="View Profile">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button class="action-btn" title="Edit Role">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="action-btn action-delete" title="Delete User">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+
+                        <!-- User 4 -->
+                        <tr>
+                            <td>
+                                <div class="user-profile">
+                                    <div class="avatar avatar-purple">EW</div>
+                                    <div class="user-details">
+                                        <div class="user-name">Emma Wilson</div>
+                                        <div class="user-id">ID: USR-2024-112</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="contact-info">
+                                    <div class="contact-primary">emma.wilson@spotxcel.com</div>
+                                    <div class="contact-secondary">+1 (555) 222-3333</div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge badge-admin">Admin</span>
+                            </td>
+                            <td>
+                                <div class="status-indicator">
+                                    <span class="status-dot status-offline"></span>
+                                    <span>Offline</span>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="action-buttons">
+                                    <button class="action-btn" title="View Profile">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button class="action-btn" title="Edit Role">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="action-btn action-delete" title="Delete User">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+
+                        <!-- User 5 -->
+                        <tr>
+                            <td>
+                                <div class="user-profile">
+                                    <div class="avatar avatar-red">RB</div>
+                                    <div class="user-details">
+                                        <div class="user-name">Robert Brown</div>
+                                        <div class="user-id">ID: USR-2024-156</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="contact-info">
+                                    <div class="contact-primary">r.brown@deliveries.co</div>
+                                    <div class="contact-secondary">+1 (555) 777-8888</div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge badge-driver">Driver</span>
+                            </td>
+                            <td>
+                                <div class="status-indicator">
+                                    <span class="status-dot status-away"></span>
+                                    <span>Away</span>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="action-buttons">
+                                    <button class="action-btn" title="View Profile">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button class="action-btn" title="Edit Role">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="action-btn action-delete" title="Delete User">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            <div class="pagination-section">
+                <div class="pagination-info">
+                    <p>Showing <span class="font-medium">1</span> to <span class="font-medium">5</span> of <span class="font-medium">42</span> results</p>
+                </div>
+                <div class="pagination-controls">
+                    <button class="pagination-btn" disabled>
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <button class="pagination-btn active">1</button>
+                    <button class="pagination-btn">2</button>
+                    <button class="pagination-btn">3</button>
+                    <span class="pagination-ellipsis">...</span>
+                    <button class="pagination-btn">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+    <script src="{% static 'dashboards/user_management.js' %}"></script>
+{% endblock %}

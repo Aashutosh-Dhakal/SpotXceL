@@ -18,7 +18,7 @@
         Transform your parking experience with cutting-edge AI technology. SpotXceL leverages computer vision and YOLOv11 models to provide intelligent, automated parking management solutions for modern urban areas.
     </p>
     <div class="hero-cta">
-        <a href="{% if request.session.user_id %}{% url 'dashboard' %}{% else %}{% url 'login' %}{% endif %}" class="btn-cta">
+        <a href="{% url 'login' %}" class="btn-cta">
             <i class="fas fa-car"></i>
             Check Availability
         </a>

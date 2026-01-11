@@ -7,7 +7,7 @@
             <div class="nav-links">
                 <a href="{% url 'home' %}" class="{% if request.resolver_match.url_name == 'home' %}active{% endif %}">Home</a>
                 {% if request.session.user_id %}
-                <a href="{% url 'dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">Dashboard</a>
+                <a href="{% url 'parking_monitoring' %}" class="{% if request.resolver_match.url_name == 'parking_monitoring' or request.resolver_match.url_name == 'user_management' or request.resolver_match.url_name == 'parking_records' %}active{% endif %}">Dashboard</a>
                 {% endif %}
             </div>
         </div>

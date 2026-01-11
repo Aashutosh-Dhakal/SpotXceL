@@ -1,0 +1,107 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block title %}Parking Lot Monitoring - SpotXceL{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'dashboards/parking_monitoring.css' %}">
+{% endblock %}
+
+{% block content %}
+    <div class="container">
+        <!-- Navigation Tabs -->
+        <div class="nav-tabs">
+            <a href="{% url 'parking_monitoring' %}" class="nav-tab active">
+                <i class="fas fa-camera"></i>
+                <span>Parking Lot Monitoring</span>
+            </a>
+            <a href="{% url 'user_management' %}" class="nav-tab">
+                <i class="fas fa-users"></i>
+                <span>User Management System</span>
+            </a>
+            <a href="{% url 'parking_records' %}" class="nav-tab">
+                <i class="fas fa-clock"></i>
+                <span>Parking Records/History</span>
+            </a>
+        </div>
+
+        <!-- Header -->
+        <div class="header">
+            <h1>Parking Lot Monitoring System</h1>
+            <p>Real-time Surveillance</p>
+        </div>
+
+        <!-- Dashboard Grid -->
+        <div class="dashboard-grid">
+            <!-- Left Column - Camera Feeds -->
+            <div class="camera-section">
+                <!-- Camera Feed 1 -->
+                <div class="camera-card">
+                    <div class="camera-header">
+                        <div class="camera-title">
+                            <i class="fas fa-circle" style="font-size: 8px;"></i>
+                            <span>Vehicle Entry Feed</span>
+                        </div>
+                        <div class="fps-badge">FPS: 30</div>
+                    </div>
+                    <div class="camera-feed">
+                        <img src="{% static 'dashboards/Images/vehicle_entry.jpg' %}" alt="Parking Lot Camera 1">
+                    </div>
+                </div>
+
+                <!-- Camera Feed 2 -->
+                <div class="camera-card">
+                    <div class="camera-header">
+                        <div class="camera-title">
+                            <i class="fas fa-circle" style="font-size: 8px;"></i>
+                            <span>Parking Space Feed</span>
+                        </div>
+                        <div class="fps-badge">FPS: 30</div>
+                    </div>
+                    <div class="camera-feed">
+                        <img src="https://images.unsplash.com/photo-1506521781263-d8422e82f27a?w=800&h=450&fit=crop" alt="Parking Lot Camera 2">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column - Stats -->
+            <div class="stats-section">
+                <!-- Total Capacity Card -->
+                <div class="stat-card">
+                    <div class="stat-label">Total Capacity</div>
+                    <div class="stat-value">0</div>
+                    <i class="fas fa-square-parking stat-icon blue"></i>
+                    <div class="progress-bar">
+                        <div class="progress-fill blue" style="width: 0%;"></div>
+                    </div>
+                </div>
+
+                <!-- Currently Occupied Card -->
+                <div class="stat-card">
+                    <div class="stat-label">Currently Occupied</div>
+                    <div class="stat-value">0</div>
+                    <i class="fas fa-car stat-icon green"></i>
+                    <div class="progress-bar">
+                        <div class="progress-fill green" id="occupancyBar" style="width: 0%;"></div>
+                    </div>
+                    <div class="occupancy-text">0% Occupancy</div>
+                </div>
+
+                <!-- Today's Revenue Card -->
+                <div class="stat-card">
+                    <div class="stat-label">Today's Revenue</div>
+                    <div class="stat-value">Rs 0</div>
+                    <i class="fas fa-wallet stat-icon orange"></i>
+                    <div class="revenue-change">
+                        <i class="fas fa-arrow-trend-up"></i>
+                        <span>Income</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+    <script src="{% static 'dashboards/parking_monitoring.js' %}"></script>
+{% endblock %}

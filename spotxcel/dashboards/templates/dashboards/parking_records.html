@@ -1,0 +1,220 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block title %}Parking Records - SpotXceL{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'dashboards/parking_records.css' %}">
+{% endblock %}
+
+{% block content %}
+    <div class="container">
+        <!-- Navigation Tabs -->
+        <div class="nav-tabs">
+            <a href="{% url 'parking_monitoring' %}" class="nav-tab">
+                <i class="fas fa-camera"></i>
+                <span>Parking Lot Monitoring</span>
+            </a>
+            <a href="{% url 'user_management' %}" class="nav-tab">
+                <i class="fas fa-users"></i>
+                <span>User Management System</span>
+            </a>
+            <a href="{% url 'parking_records' %}" class="nav-tab active">
+                <i class="fas fa-clock"></i>
+                <span>Parking Records/History</span>
+            </a>
+        </div>
+
+        <!-- Header Section -->
+        <div class="page-header">
+            <div>
+                <h1>Parking Records</h1>
+                <p>View historical parking data, duration, and fees.</p>
+            </div>
+            <button class="btn-export">
+                <i class="fas fa-download"></i>
+                Export Data
+            </button>
+        </div>
+
+        <!-- Filter Section -->
+        <div class="filter-card">
+            <div class="filter-grid">
+                <div class="filter-item">
+                    <label for="vehicle-number">Vehicle Number</label>
+                    <div class="input-with-icon">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="vehicle-number" placeholder="e.g. ABC-1234">
+                    </div>
+                </div>
+                <div class="filter-item">
+                    <label for="date">Date</label>
+                    <div class="input-with-icon">
+                        <i class="fas fa-calendar-alt"></i>
+                        <input type="date" id="date">
+                    </div>
+                </div>
+                <div class="filter-actions">
+                    <button class="btn-filter">
+                        <i class="fas fa-filter"></i>
+                        Filter
+                    </button>
+                    <button class="btn-clear">Clear</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Records Table -->
+        <div class="table-card">
+            <div class="table-wrapper">
+                <table class="records-table">
+                    <thead>
+                        <tr>
+                            <th>Vehicle License</th>
+                            <th>Slot ID</th>
+                            <th>Entry Time</th>
+                            <th>Exit Time</th>
+                            <th>Duration</th>
+                            <th>Fee Charged</th>
+                            <th class="text-right">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Record 1 - Active -->
+                        <tr>
+                            <td>
+                                <div class="vehicle-info">
+                                    <div class="vehicle-icon active">
+                                        <i class="fas fa-car"></i>
+                                    </div>
+                                    <div class="vehicle-number">KA-05-MV-4321</div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="slot-badge">A-102</span>
+                            </td>
+                            <td class="text-secondary">Oct 25, 14:30</td>
+                            <td class="text-secondary">-</td>
+                            <td class="duration-active">1h 15m (Active)</td>
+                            <td class="text-muted">Pending</td>
+                            <td>
+                                <span class="status-badge status-occupied">Occupied</span>
+                            </td>
+                        </tr>
+
+                        <!-- Record 2 - Completed -->
+                        <tr>
+                            <td>
+                                <div class="vehicle-info">
+                                    <div class="vehicle-icon">
+                                        <i class="fas fa-car"></i>
+                                    </div>
+                                    <div class="vehicle-number">TN-02-AB-9988</div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="slot-badge">B-05</span>
+                            </td>
+                            <td class="text-secondary">Oct 25, 10:00</td>
+                            <td class="text-secondary">Oct 25, 12:45</td>
+                            <td class="text-secondary">2h 45m</td>
+                            <td class="fee-amount">$8.25</td>
+                            <td>
+                                <span class="status-badge status-completed">Completed</span>
+                            </td>
+                        </tr>
+
+                        <!-- Record 3 - Completed -->
+                        <tr>
+                            <td>
+                                <div class="vehicle-info">
+                                    <div class="vehicle-icon">
+                                        <i class="fas fa-car"></i>
+                                    </div>
+                                    <div class="vehicle-number">MH-12-XY-1234</div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="slot-badge">A-108</span>
+                            </td>
+                            <td class="text-secondary">Oct 25, 09:15</td>
+                            <td class="text-secondary">Oct 25, 10:30</td>
+                            <td class="text-secondary">1h 15m</td>
+                            <td class="fee-amount">$3.75</td>
+                            <td>
+                                <span class="status-badge status-completed">Completed</span>
+                            </td>
+                        </tr>
+
+                        <!-- Record 4 - Completed -->
+                        <tr>
+                            <td>
+                                <div class="vehicle-info">
+                                    <div class="vehicle-icon">
+                                        <i class="fas fa-car"></i>
+                                    </div>
+                                    <div class="vehicle-number">DL-08-CD-6789</div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="slot-badge">C-305</span>
+                            </td>
+                            <td class="text-secondary">Oct 24, 18:00</td>
+                            <td class="text-secondary">Oct 24, 21:00</td>
+                            <td class="text-secondary">3h 00m</td>
+                            <td class="fee-amount">$9.00</td>
+                            <td>
+                                <span class="status-badge status-completed">Completed</span>
+                            </td>
+                        </tr>
+
+                        <!-- Record 5 - Completed -->
+                        <tr>
+                            <td>
+                                <div class="vehicle-info">
+                                    <div class="vehicle-icon">
+                                        <i class="fas fa-car"></i>
+                                    </div>
+                                    <div class="vehicle-number">KL-01-EF-4567</div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="slot-badge">B-022</span>
+                            </td>
+                            <td class="text-secondary">Oct 24, 08:30</td>
+                            <td class="text-secondary">Oct 24, 09:30</td>
+                            <td class="text-secondary">1h 00m</td>
+                            <td class="fee-amount">$3.00</td>
+                            <td>
+                                <span class="status-badge status-completed">Completed</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            <div class="pagination-section">
+                <div class="pagination-info">
+                    <p>Showing <span class="font-medium">1</span> to <span class="font-medium">5</span> of <span class="font-medium">128</span> results</p>
+                </div>
+                <div class="pagination-controls">
+                    <button class="pagination-btn" disabled>
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <button class="pagination-btn active">1</button>
+                    <button class="pagination-btn">2</button>
+                    <button class="pagination-btn">3</button>
+                    <span class="pagination-ellipsis">...</span>
+                    <button class="pagination-btn">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+    <script src="{% static 'dashboards/parking_records.js' %}"></script>
+{% endblock %}
