@@ -31,7 +31,7 @@
                 <div class="alert-content">
                     <p class="alert-message">{{ message }}</p>
                 </div>
-                <button class="alert-close" onclick="this.parentElement.style.display='none'"><i class="fas fa-times"></i></button>
+
             </div>
             {% endfor %}
         {% else %}
@@ -40,19 +40,18 @@
                 <div class="alert-content">
                     <p class="alert-message" id="alert-message"></p>
                 </div>
-                <button class="alert-close" id="alert-close"><i class="fas fa-times"></i></button>
             </div>
         {% endif %}
 
         <div class="card-body">
-            <form action="{% url 'login' %}" method="POST" id="login-form">
+            <form action="{% url 'login' %}" method="POST" id="login-form" autocomplete="on">
                 {% csrf_token %}
                 
                 <div class="form-group">
                     <label for="username">Email or Username</label>
                     <div class="input-wrapper">
                         <i class="fas fa-user input-icon"></i>
-                        <input type="text" id="username" name="username" required/>
+                        <input type="text" id="username" name="username" value="{{ username|default:'' }}" required/>
                     </div>
                 </div>
 
@@ -63,7 +62,7 @@
                     </div>
                     <div class="input-wrapper">
                         <i class="fas fa-lock input-icon"></i>
-                        <input type="password" id="password" name="password" required/>
+                        <input type="password" id="password" name="password" required autocomplete="current-password" />
                         <button type="button" class="toggle-password" id="toggle-password">
                             <i class="fas fa-eye" id="password-icon"></i>
                         </button>
@@ -86,4 +85,17 @@
 
 {% block extra_js %}
 <script src="{% static 'accounts/login.js' %}"></script>
+<script>
+    // Auto-close server-side alert messages after 5 seconds
+    document.addEventListener('DOMContentLoaded', function() {
+        const serverAlerts = document.querySelectorAll('.alert-card');
+        serverAlerts.forEach(alert => {
+            if (alert.id !== 'alert-card') { // Skip the template alert
+                setTimeout(() => {
+                    alert.style.display = 'none';
+                }, 5000);
+            }
+        });
+    });
+</script>
 {% endblock %}

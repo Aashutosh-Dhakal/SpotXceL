@@ -31,7 +31,6 @@
                 <div class="alert-content">
                     <p class="alert-message">{{ message }}</p>
                 </div>
-                <button class="alert-close" onclick="this.parentElement.style.display='none'"><i class="fas fa-times"></i></button>
             </div>
             {% endfor %}
         {% else %}
@@ -40,7 +39,6 @@
                 <div class="alert-content">
                     <p class="alert-message" id="alert-message"></p>
                 </div>
-                <button class="alert-close" id="alert-close"><i class="fas fa-times"></i></button>
             </div>
         {% endif %}
 
@@ -118,4 +116,17 @@
 
 {% block extra_js %}
 <script src="{% static 'accounts/signup.js' %}"></script>
+<script>
+    // Auto-close server-side alert messages after 5 seconds
+    document.addEventListener('DOMContentLoaded', function() {
+        const serverAlerts = document.querySelectorAll('.alert-card');
+        serverAlerts.forEach(alert => {
+            if (alert.id !== 'alert-card') { // Skip the template alert
+                setTimeout(() => {
+                    alert.style.display = 'none';
+                }, 5000);
+            }
+        });
+    });
+</script>
 {% endblock %}

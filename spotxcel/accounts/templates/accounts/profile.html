@@ -1,0 +1,169 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block title %}Profile Settings - SpotXceL{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'accounts/profile.css' %}">
+{% endblock %}
+
+{% block content %}
+    <div class="profile-wrapper">
+        <div class="profile-container">
+            <!-- Alert Messages -->
+            {% if messages %}
+                {% for message in messages %}
+                <div class="alert-card {% if message.tags %}alert-{{ message.tags }}{% else %}alert-info{% endif %}">
+                    {% if message.tags == 'success' %}
+                        <i class="fas fa-check-circle alert-icon"></i>
+                    {% elif message.tags == 'warning' %}
+                        <i class="fas fa-exclamation-triangle alert-icon"></i>
+                    {% elif message.tags == 'error' %}
+                        <i class="fas fa-exclamation-circle alert-icon"></i>
+                    {% else %}
+                        <i class="fas fa-info-circle alert-icon"></i>
+                    {% endif %}
+                    <div class="alert-content">
+                        <p class="alert-message">{{ message }}</p>
+                    </div>
+                </div>
+                {% endfor %}
+            {% endif %}
+
+            <!-- Page Header -->
+            <div class="page-header">
+                <div class="header-content">
+                    <div class="header-text">
+                        <h1><i class="fas fa-user-circle"></i> Profile Settings</h1>
+                        <p>Manage your account information, security, and vehicle details</p>
+                    </div>
+                    <a href="{% if request.session.role == 'admin' %}{% url 'parking_monitoring' %}{% else %}{% url 'user_dashboard' %}{% endif %}" class="btn-back-home">
+                        <i class="fas fa-tachometer-alt"></i>
+                        <span>Back to Dashboard</span>
+                    </a>
+                </div>
+            </div>
+
+            <form method="POST" action="{% url 'profile' %}" class="profile-form">
+                {% csrf_token %}
+
+                <!-- Profile Overview Card -->
+                <div class="profile-overview-card">
+                    <div class="user-avatar">
+                        <i class="fas fa-user-circle"></i>
+                    </div>
+                    <div class="user-info-summary">
+                        <div>
+                            <h2>{{ user.username }}</h2>
+                            <p class="user-email"><i class="fas fa-envelope"></i> {{ user.email }}</p>
+                        </div>
+                        <p class="user-role"><i class="fas fa-id-badge"></i> {{ user.role|title }}</p>
+                    </div>
+                </div>
+
+                <div class="cards-grid">
+                    <!-- Personal Information Card -->
+                    <div class="info-card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-user"></i> Personal Information</h3>
+                            <p>Update your personal details</p>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label for="fullname">Username</label>
+                                <div class="input-wrapper">
+                                    <i class="fas fa-id-badge input-icon"></i>
+                                    <input type="text" id="fullname" name="fullname" 
+                                           placeholder="Enter your username" 
+                                           value="{{ user.username }}" required>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="email">Email Address</label>
+                                <div class="input-wrapper">
+                                    <i class="fas fa-envelope input-icon"></i>
+                                    <input type="email" id="email" name="email" 
+                                           placeholder="your.email@example.com" 
+                                           value="{{ user.email }}" required>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Security Card -->
+                    <div class="info-card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-shield-alt"></i> Security</h3>
+                            <p>Manage your password</p>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label for="current_password">Current Password</label>
+                                <div class="input-wrapper">
+                                    <i class="fas fa-key input-icon"></i>
+                                    <input type="password" id="current_password" name="current_password" 
+                                           placeholder="Enter current password">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="new_password">New Password</label>
+                                <div class="input-wrapper">
+                                    <i class="fas fa-lock input-icon"></i>
+                                    <input type="password" id="new_password" name="new_password" 
+                                           placeholder="Enter new password">
+                                </div>
+                                <p class="input-hint"><i class="fas fa-info-circle"></i> Leave blank to keep your current password. Minimum 8 characters.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Vehicles Card -->
+                <div class="info-card vehicles-card">
+                    <div class="card-header">
+                        <div>
+                            <h3><i class="fas fa-car"></i> Your Vehicles</h3>
+                            <p>Manage your registered vehicles for parking</p>
+                        </div>
+                        <button type="button" class="btn-add-vehicle" id="addVehicleBtn">
+                            <i class="fas fa-plus-circle"></i>
+                            <span>Add Vehicle</span>
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div class="vehicles-list" id="vehiclesList">
+                            <!-- Vehicles will be added dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Form Actions -->
+                <div class="form-actions">
+                    <button type="button" class="btn-cancel" onclick="resetForm()">
+                        <i class="fas fa-times"></i>
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn-save">
+                        <i class="fas fa-save"></i>
+                        Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+    <script src="{% static 'accounts/profile.js' %}"></script>
+    <script>
+        // Auto-close server-side alert messages after 5 seconds
+        document.addEventListener('DOMContentLoaded', function() {
+            const serverAlerts = document.querySelectorAll('.alert-card');
+            serverAlerts.forEach(alert => {
+                setTimeout(() => {
+                    alert.style.display = 'none';
+                }, 5000);
+            });
+        });
+    </script>
+{% endblock %}

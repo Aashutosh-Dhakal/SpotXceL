@@ -18,10 +18,24 @@
         Transform your parking experience with cutting-edge AI technology. SpotXceL leverages computer vision and YOLOv11 models to provide intelligent, automated parking management solutions for modern urban areas.
     </p>
     <div class="hero-cta">
-        <a href="{% url 'login' %}" class="btn-cta">
-            <i class="fas fa-car"></i>
-            Check Availability
-        </a>
+        {% if request.session.user_id %}
+            {% if request.session.role == 'admin' %}
+                <a href="{% url 'parking_monitoring' %}" class="btn-cta">
+                    <i class="fas fa-car"></i>
+                    Check Availability
+                </a>
+            {% else %}
+                <a href="{% url 'user_dashboard' %}" class="btn-cta">
+                    <i class="fas fa-car"></i>
+                    Check Availability
+                </a>
+            {% endif %}
+        {% else %}
+            <a href="{% url 'login' %}" class="btn-cta">
+                <i class="fas fa-car"></i>
+                Check Availability
+            </a>
+        {% endif %}
     </div>
 </section>
 
@@ -50,7 +64,7 @@
                     <p class="stat-value">0</p>
                 </div>
                 <div class="stat-icon red">
-                    <i class="fas fa-car-crash"></i>
+                    <i class="fas fa-lock"></i>
                 </div>
             </div>
             <div class="stat-card total">
@@ -89,7 +103,7 @@
         </div>
         <div class="feature-card">
             <div class="feature-icon-wrapper">
-                <i class="fas fa-exclamation-triangle feature-icon"></i>
+                <i class="fas fa-car-crash feature-icon"></i>
             </div>
             <h3 class="feature-title">Collision Detection</h3>
             <p class="feature-description">

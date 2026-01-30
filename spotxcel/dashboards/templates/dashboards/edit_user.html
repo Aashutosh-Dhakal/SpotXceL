@@ -1,0 +1,166 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block title %}Edit User - SpotXceL{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'dashboards/edit_user.css' %}">
+{% endblock %}
+
+{% block content %}
+    <div class="container">
+        <!-- Alert Messages -->
+        {% if messages %}
+            {% for message in messages %}
+            <div class="alert-card {% if message.tags %}alert-{{ message.tags }}{% else %}alert-info{% endif %}">
+                {% if message.tags == 'success' %}
+                    <i class="fas fa-check-circle alert-icon"></i>
+                {% elif message.tags == 'warning' %}
+                    <i class="fas fa-exclamation-triangle alert-icon"></i>
+                {% elif message.tags == 'error' %}
+                    <i class="fas fa-exclamation-circle alert-icon"></i>
+                {% else %}
+                    <i class="fas fa-info-circle alert-icon"></i>
+                {% endif %}
+                <div class="alert-content">
+                    <p class="alert-message">{{ message }}</p>
+                </div>
+            </div>
+            {% endfor %}
+        {% endif %}
+
+        <div class="edit-form-card">
+            <h2>Edit User Details</h2>
+            
+            <form method="POST" id="edit-user-form">
+                {% csrf_token %}
+                
+                <div class="form-group">
+                    <label>User ID</label>
+                    <input type="text" value="{{ user.user_id }}" disabled>
+                </div>
+                
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" name="username" value="{{ user.username }}" required>
+                </div>
+                
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="text" value="{{ user.email }}" disabled>
+                </div>
+                
+                <div class="form-group">
+                    <label for="role">Role</label>
+                    <select id="role" name="role" required>
+                        <option value="admin" {% if user.role == 'admin' %}selected{% endif %}>Admin</option>
+                        <option value="driver" {% if user.role == 'driver' %}selected{% endif %}>Driver</option>
+                    </select>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn-submit">Update User</button>
+                    <div class="btn-group">
+                        <button type="button" class="btn-cancel" id="cancel-btn">Cancel</button>
+                        <a href="{% url 'user_management' %}" class="btn-back">Go Back</a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Store original form values
+    const form = document.getElementById('edit-user-form');
+    const usernameInput = document.getElementById('username');
+    const roleSelect = document.getElementById('role');
+    const cancelBtn = document.getElementById('cancel-btn');
+    
+    // Store initial values
+    const originalValues = {
+        username: usernameInput.value,
+        role: roleSelect.value
+    };
+    
+    // Cancel button - revert to original values
+    cancelBtn.addEventListener('click', function() {
+        usernameInput.value = originalValues.username;
+        roleSelect.value = originalValues.role;
+        
+        // Remove any error/success states
+        usernameInput.classList.remove('input-error', 'input-success');
+        roleSelect.classList.remove('input-error', 'input-success');
+    });
+    
+    // Form validation on submit
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const username = usernameInput.value.trim();
+        const usernameRegex = /^[A-Za-z][a-z0-9_-]*$/;
+        
+        // Remove previous states
+        usernameInput.classList.remove('input-error', 'input-success');
+        
+        // Validate username
+        if (username.length < 3) {
+            usernameInput.classList.add('input-error');
+            showAlert('Username must be at least 3 characters long', 'error');
+            return;
+        }
+        
+        if (!usernameRegex.test(username)) {
+            usernameInput.classList.add('input-error');
+            showAlert('Username must start with a letter and contain only lowercase letters, numbers, underscores, or hyphens', 'error');
+            return;
+        }
+        
+        // If validation passes, submit the form
+        usernameInput.classList.add('input-success');
+        form.submit();
+    });
+    
+    // Show alert function
+    function showAlert(message, type) {
+        // Check if alert already exists
+        let existingAlert = document.querySelector('.alert-card');
+        if (existingAlert) {
+            existingAlert.remove();
+        }
+        
+        // Create new alert
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert-card alert-${type}`;
+        
+        let icon = 'info-circle';
+        if (type === 'error') icon = 'exclamation-circle';
+        else if (type === 'success') icon = 'check-circle';
+        else if (type === 'warning') icon = 'exclamation-triangle';
+        
+        alertDiv.innerHTML = `
+            <i class="fas fa-${icon} alert-icon"></i>
+            <div class="alert-content">
+                <p class="alert-message">${message}</p>
+            </div>
+        `;
+        
+        const container = document.querySelector('.container');
+        container.insertBefore(alertDiv, container.firstChild);
+        
+        // Auto-close after 5 seconds
+        setTimeout(() => {
+            alertDiv.style.display = 'none';
+        }, 5000);
+    }
+    
+    // Auto-close existing alerts after 5 seconds
+    const alerts = document.querySelectorAll('.alert-card');
+    alerts.forEach(alert => {
+        setTimeout(() => {
+            alert.style.display = 'none';
+        }, 5000);
+    });
+</script>
+{% endblock %}

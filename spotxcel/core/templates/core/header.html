@@ -7,16 +7,16 @@
             <div class="nav-links">
                 <a href="{% url 'home' %}" class="{% if request.resolver_match.url_name == 'home' %}active{% endif %}">Home</a>
                 {% if request.session.user_id %}
-                <a href="{% url 'parking_monitoring' %}" class="{% if request.resolver_match.url_name == 'parking_monitoring' or request.resolver_match.url_name == 'user_management' or request.resolver_match.url_name == 'parking_records' %}active{% endif %}">Dashboard</a>
+                <a href="{% if request.session.role == 'admin' %}{% url 'parking_monitoring' %}{% else %}{% url 'user_dashboard' %}{% endif %}" class="{% if request.resolver_match.url_name == 'parking_monitoring' or request.resolver_match.url_name == 'user_management' or request.resolver_match.url_name == 'parking_records' or request.resolver_match.url_name == 'user_dashboard' %}active{% endif %}">Dashboard</a>
                 {% endif %}
             </div>
         </div>
         <div class="nav-right">
             {% if request.session.user_id %}
-                <div class="user-info">
+                <a href="{% url 'profile' %}" class="user-info">
                     <i class="fas fa-user-circle"></i>
                     <span>{{ request.session.username }}</span>
-                </div>
+                </a>
                 <a href="{% url 'logout' %}" class="btn-logout">
                     <i class="fas fa-sign-out-alt"></i> Logout
                 </a>

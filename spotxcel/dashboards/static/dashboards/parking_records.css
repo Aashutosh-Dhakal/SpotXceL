@@ -41,6 +41,130 @@
     font-size: 16px;
 }
 
+/* Alert Card */
+.alert-card {
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin: 0 0 1.5rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    animation: slideDown 0.3s ease-out;
+}
+
+.alert-card.alert-error {
+    background-color: #FEF2F2;
+    border: 1px solid #FCA5A5;
+}
+
+.alert-card.alert-success {
+    background-color: #F0FDF4;
+    border: 1px solid #86EFAC;
+}
+
+.alert-card.alert-warning {
+    background-color: #FFFBEB;
+    border: 1px solid #FCD34D;
+}
+
+.alert-card.alert-info {
+    background-color: #EFF6FF;
+    border: 1px solid #93C5FD;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.alert-icon {
+    font-size: 1.125rem;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+}
+
+.alert-error .alert-icon {
+    color: #DC2626;
+}
+
+.alert-success .alert-icon {
+    color: #16A34A;
+}
+
+.alert-warning .alert-icon {
+    color: #D97706;
+}
+
+.alert-info .alert-icon {
+    color: #2563EB;
+}
+
+.alert-content {
+    flex: 1;
+}
+
+.alert-message {
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin: 0;
+}
+
+.alert-error .alert-message {
+    color: #991B1B;
+}
+
+.alert-success .alert-message {
+    color: #15803D;
+}
+
+.alert-warning .alert-message {
+    color: #92400E;
+}
+
+.alert-info .alert-message {
+    color: #1E40AF;
+}
+
+.alert-close {
+    background: none;
+    border: none;
+    font-size: 1.125rem;
+    cursor: pointer;
+    padding: 0.25rem;
+    line-height: 1;
+    flex-shrink: 0;
+    transition: opacity 0.2s;
+    display: flex;
+    align-items: center;
+}
+
+.alert-error .alert-close {
+    color: #DC2626;
+}
+
+.alert-success .alert-close {
+    color: #16A34A;
+}
+
+.alert-warning .alert-close {
+    color: #D97706;
+}
+
+.alert-info .alert-close {
+    color: #2563EB;
+}
+
+.alert-close:hover {
+    opacity: 0.7;
+}
+
 /* Page Header */
 .page-header {
     display: flex;

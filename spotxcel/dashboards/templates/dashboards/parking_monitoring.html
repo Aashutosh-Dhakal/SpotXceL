@@ -9,6 +9,27 @@
 
 {% block content %}
     <div class="container">
+
+        <!-- Alert Messages -->
+        {% if messages %}
+            {% for message in messages %}
+            <div class="alert-card {% if message.tags %}alert-{{ message.tags }}{% else %}alert-info{% endif %}">
+                {% if message.tags == 'success' %}
+                    <i class="fas fa-check-circle alert-icon"></i>
+                {% elif message.tags == 'warning' %}
+                    <i class="fas fa-exclamation-triangle alert-icon"></i>
+                {% elif message.tags == 'error' %}
+                    <i class="fas fa-exclamation-circle alert-icon"></i>
+                {% else %}
+                    <i class="fas fa-info-circle alert-icon"></i>
+                {% endif %}
+                <div class="alert-content">
+                    <p class="alert-message">{{ message }}</p>
+                </div>
+            </div>
+            {% endfor %}
+        {% endif %}
+
         <!-- Navigation Tabs -->
         <div class="nav-tabs">
             <a href="{% url 'parking_monitoring' %}" class="nav-tab active">
@@ -104,4 +125,15 @@
 
 {% block extra_js %}
     <script src="{% static 'dashboards/parking_monitoring.js' %}"></script>
+    <script>
+        // Auto-close server-side alert messages after 5 seconds
+        document.addEventListener('DOMContentLoaded', function() {
+            const serverAlerts = document.querySelectorAll('.alert-card');
+            serverAlerts.forEach(alert => {
+                setTimeout(() => {
+                    alert.style.display = 'none';
+                }, 5000);
+            });
+        });
+    </script>
 {% endblock %}

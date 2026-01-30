@@ -7,7 +7,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const passwordIcon = document.getElementById('password-icon');
     const alertCard = document.getElementById('alert-card');
     const alertMessage = document.getElementById('alert-message');
-    const alertClose = document.getElementById('alert-close');
 
     // Show alert message
     function showAlert(message) {
@@ -27,11 +26,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Hide alert message
     function hideAlert() {
         alertCard.style.display = 'none';
-    }
-
-    // Alert close button
-    if (alertClose) {
-        alertClose.addEventListener('click', hideAlert);
     }
 
     // Password visibility toggle
@@ -55,6 +49,7 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault();
             showAlert('Email or username is required.');
             usernameInput.classList.add('input-error');
+            passwordInput.value = ''; // Clear password
             usernameInput.focus();
             return false;
         }
@@ -72,6 +67,7 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault();
             showAlert('Password must be at least 8 characters.');
             passwordInput.classList.add('input-error');
+            passwordInput.value = ''; // Clear password
             passwordInput.focus();
             return false;
         }

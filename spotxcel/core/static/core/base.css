@@ -115,12 +115,19 @@ body {
     transform: scale(1.05);
 }
 
-.user-info {
+a.user-info {
     color: #D1D5DB;
     font-size: 0.875rem;
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    text-decoration: none !important;
+    cursor: pointer;
+}
+
+a.user-info:hover {
+    color: white;
+    text-decoration: none !important;
 }
 
 .user-info i {

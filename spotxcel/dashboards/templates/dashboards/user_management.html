@@ -9,6 +9,28 @@
 
 {% block content %}
     <div class="container">
+
+        <!-- Alert Messages -->
+        {% if messages %}
+            {% for message in messages %}
+            <div class="alert-card {% if message.tags %}alert-{{ message.tags }}{% else %}alert-info{% endif %}">
+                {% if message.tags == 'success' %}
+                    <i class="fas fa-check-circle alert-icon"></i>
+                {% elif message.tags == 'warning' %}
+                    <i class="fas fa-exclamation-triangle alert-icon"></i>
+                {% elif message.tags == 'error' %}
+                    <i class="fas fa-exclamation-circle alert-icon"></i>
+                {% else %}
+                    <i class="fas fa-info-circle alert-icon"></i>
+                {% endif %}
+                <div class="alert-content">
+                    <p class="alert-message">{{ message }}</p>
+                </div>
+                <button class="alert-close" onclick="this.parentElement.style.display='none'"><i class="fas fa-times"></i></button>
+            </div>
+            {% endfor %}
+        {% endif %}
+
         <!-- Navigation Tabs -->
         <div class="nav-tabs">
             <a href="{% url 'parking_monitoring' %}" class="nav-tab">
@@ -31,41 +53,39 @@
                 <h1>User Management System</h1>
                 <p>Manage system administrators and drivers, update roles, and handle account access.</p>
             </div>
-            <button class="btn-add-user">
-                <i class="fas fa-user-plus"></i>
-                Add New User
-            </button>
         </div>
 
         <!-- Filter Section -->
         <div class="filter-card">
-            <div class="filter-grid">
-                <div class="filter-item search-item">
-                    <label for="search-user">Search User</label>
-                    <div class="input-with-icon">
-                        <i class="fas fa-search"></i>
-                        <input type="text" id="search-user" placeholder="Name, email, or phone...">
+            <form method="GET" action="{% url 'user_management' %}" id="filterForm">
+                <div class="filter-grid">
+                    <div class="filter-item search-item">
+                        <label for="search-user">Search User</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="search-user" name="search" placeholder="Name, email, or user ID..." value="{{ search_query }}">
+                        </div>
+                    </div>
+                    <div class="filter-item">
+                        <label for="role-filter">Role</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-user-shield"></i>
+                            <select id="role-filter" name="role">
+                                <option value="all" {% if not role_filter or role_filter == 'all' %}selected{% endif %}>All Roles</option>
+                                <option value="admin" {% if role_filter == 'admin' %}selected{% endif %}>Admin</option>
+                                <option value="driver" {% if role_filter == 'driver' %}selected{% endif %}>Driver</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="filter-actions">
+                        <button type="submit" class="btn-filter">
+                            <i class="fas fa-filter"></i>
+                            Filter
+                        </button>
+                        <button type="button" class="btn-clear" onclick="clearFilters()">Clear</button>
                     </div>
                 </div>
-                <div class="filter-item">
-                    <label for="role-filter">Role</label>
-                    <div class="input-with-icon">
-                        <i class="fas fa-user-shield"></i>
-                        <select id="role-filter">
-                            <option>All Roles</option>
-                            <option>Admin</option>
-                            <option>Driver</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="filter-actions">
-                    <button class="btn-filter">
-                        <i class="fas fa-filter"></i>
-                        Filter
-                    </button>
-                    <button class="btn-clear">Clear</button>
-                </div>
-            </div>
+            </form>
         </div>
 
         <!-- Users Table -->
@@ -74,218 +94,65 @@
                 <table class="users-table">
                     <thead>
                         <tr>
-                            <th>User Profile</th>
-                            <th>Contact Info</th>
-                            <th>Assigned Role</th>
-                            <th>Status</th>
+                            <th>User ID</th>
+                            <th>Username</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Created At</th>
+                            <th>Last Logged In</th>
                             <th class="text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <!-- User 1 -->
-                        <tr>
-                            <td>
-                                <div class="user-profile">
-                                    <div class="avatar avatar-orange">JD</div>
-                                    <div class="user-details">
-                                        <div class="user-name">John Doe</div>
-                                        <div class="user-id">ID: USR-2024-001</div>
+                        {% if users %}
+                            {% for user in users %}
+                            <tr>
+                                <td>
+                                    <span class="user-id-badge">#{{ user.user_id }}</span>
+                                </td>
+                                <td>
+                                    <div class="username-cell">{{ user.username }}</div>
+                                </td>
+                                <td>
+                                    <div class="email-cell">{{ user.email }}</div>
+                                </td>
+                                <td>
+                                    {% if user.role == 'admin' %}
+                                        <span class="badge badge-admin">Admin</span>
+                                    {% else %}
+                                        <span class="badge badge-driver">Driver</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="date-cell">{{ user.created_at|date:"M d, Y H:i" }}</div>
+                                </td>
+                                <td>
+                                    {% if user.last_logged %}
+                                        <div class="date-cell">{{ user.last_logged|date:"M d, Y H:i" }}</div>
+                                    {% else %}
+                                        <div class="text-muted">Never</div>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <a href="{% url 'edit_user' user.user_id %}" class="action-btn" title="Edit Role">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        <button class="action-btn action-delete" title="Delete User" onclick="confirmDelete('{{ user.username }}', {{ user.user_id }})">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </button>
                                     </div>
-                                </div>
-                            </td>
-                            <td>
-                                <div class="contact-info">
-                                    <div class="contact-primary">john.doe@spotxcel.com</div>
-                                    <div class="contact-secondary">+1 (555) 123-4567</div>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="badge badge-admin">Admin</span>
-                            </td>
-                            <td>
-                                <div class="status-indicator">
-                                    <span class="status-dot status-active"></span>
-                                    <span>Active</span>
-                                </div>
-                            </td>
-                            <td>
-                                <div class="action-buttons">
-                                    <button class="action-btn" title="View Profile">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                    <button class="action-btn" title="Edit Role">
-                                        <i class="fas fa-edit"></i>
-                                    </button>
-                                    <button class="action-btn action-delete" title="Delete User">
-                                        <i class="fas fa-trash-alt"></i>
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-
-                        <!-- User 2 -->
-                        <tr>
-                            <td>
-                                <div class="user-profile">
-                                    <div class="avatar avatar-blue">AS</div>
-                                    <div class="user-details">
-                                        <div class="user-name">Alice Smith</div>
-                                        <div class="user-id">ID: USR-2024-042</div>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <div class="contact-info">
-                                    <div class="contact-primary">alice.smith@example.com</div>
-                                    <div class="contact-secondary">+1 (555) 987-6543</div>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="badge badge-driver">Driver</span>
-                            </td>
-                            <td>
-                                <div class="status-indicator">
-                                    <span class="status-dot status-active"></span>
-                                    <span>Active</span>
-                                </div>
-                            </td>
-                            <td>
-                                <div class="action-buttons">
-                                    <button class="action-btn" title="View Profile">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                    <button class="action-btn" title="Edit Role">
-                                        <i class="fas fa-edit"></i>
-                                    </button>
-                                    <button class="action-btn action-delete" title="Delete User">
-                                        <i class="fas fa-trash-alt"></i>
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-
-                        <!-- User 3 -->
-                        <tr>
-                            <td>
-                                <div class="user-profile">
-                                    <div class="avatar avatar-green">MJ</div>
-                                    <div class="user-details">
-                                        <div class="user-name">Michael Johnson</div>
-                                        <div class="user-id">ID: USR-2024-089</div>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <div class="contact-info">
-                                    <div class="contact-primary">m.johnson@logistics.net</div>
-                                    <div class="contact-secondary">+1 (555) 456-7890</div>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="badge badge-driver">Driver</span>
-                            </td>
-                            <td>
-                                <div class="status-indicator">
-                                    <span class="status-dot status-active"></span>
-                                    <span>Active</span>
-                                </div>
-                            </td>
-                            <td>
-                                <div class="action-buttons">
-                                    <button class="action-btn" title="View Profile">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                    <button class="action-btn" title="Edit Role">
-                                        <i class="fas fa-edit"></i>
-                                    </button>
-                                    <button class="action-btn action-delete" title="Delete User">
-                                        <i class="fas fa-trash-alt"></i>
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-
-                        <!-- User 4 -->
-                        <tr>
-                            <td>
-                                <div class="user-profile">
-                                    <div class="avatar avatar-purple">EW</div>
-                                    <div class="user-details">
-                                        <div class="user-name">Emma Wilson</div>
-                                        <div class="user-id">ID: USR-2024-112</div>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <div class="contact-info">
-                                    <div class="contact-primary">emma.wilson@spotxcel.com</div>
-                                    <div class="contact-secondary">+1 (555) 222-3333</div>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="badge badge-admin">Admin</span>
-                            </td>
-                            <td>
-                                <div class="status-indicator">
-                                    <span class="status-dot status-offline"></span>
-                                    <span>Offline</span>
-                                </div>
-                            </td>
-                            <td>
-                                <div class="action-buttons">
-                                    <button class="action-btn" title="View Profile">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                    <button class="action-btn" title="Edit Role">
-                                        <i class="fas fa-edit"></i>
-                                    </button>
-                                    <button class="action-btn action-delete" title="Delete User">
-                                        <i class="fas fa-trash-alt"></i>
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-
-                        <!-- User 5 -->
-                        <tr>
-                            <td>
-                                <div class="user-profile">
-                                    <div class="avatar avatar-red">RB</div>
-                                    <div class="user-details">
-                                        <div class="user-name">Robert Brown</div>
-                                        <div class="user-id">ID: USR-2024-156</div>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <div class="contact-info">
-                                    <div class="contact-primary">r.brown@deliveries.co</div>
-                                    <div class="contact-secondary">+1 (555) 777-8888</div>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="badge badge-driver">Driver</span>
-                            </td>
-                            <td>
-                                <div class="status-indicator">
-                                    <span class="status-dot status-away"></span>
-                                    <span>Away</span>
-                                </div>
-                            </td>
-                            <td>
-                                <div class="action-buttons">
-                                    <button class="action-btn" title="View Profile">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                    <button class="action-btn" title="Edit Role">
-                                        <i class="fas fa-edit"></i>
-                                    </button>
-                                    <button class="action-btn action-delete" title="Delete User">
-                                        <i class="fas fa-trash-alt"></i>
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="7" style="text-align: center; padding: 40px; color: #999;">
+                                    <i class="fas fa-users" style="font-size: 48px; margin-bottom: 16px; display: block;"></i>
+                                    No users found. Try adjusting your search or filters.
+                                </td>
+                            </tr>
+                        {% endif %}
                     </tbody>
                 </table>
             </div>
@@ -293,20 +160,28 @@
             <!-- Pagination -->
             <div class="pagination-section">
                 <div class="pagination-info">
-                    <p>Showing <span class="font-medium">1</span> to <span class="font-medium">5</span> of <span class="font-medium">42</span> results</p>
+                    <p>Showing <span class="font-medium">{{ users|length }}</span> result{{ users|length|pluralize }}</p>
                 </div>
-                <div class="pagination-controls">
-                    <button class="pagination-btn" disabled>
-                        <i class="fas fa-chevron-left"></i>
-                    </button>
-                    <button class="pagination-btn active">1</button>
-                    <button class="pagination-btn">2</button>
-                    <button class="pagination-btn">3</button>
-                    <span class="pagination-ellipsis">...</span>
-                    <button class="pagination-btn">
-                        <i class="fas fa-chevron-right"></i>
-                    </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Confirm Delete</h3>
+                <button class="modal-close" onclick="closeDeleteModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-icon">
+                    <i class="fas fa-exclamation-triangle"></i>
                 </div>
+                <p>Are you sure you want to delete user <strong id="deleteUsername"></strong>?</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel-modal" onclick="closeDeleteModal()">Cancel</button>
+                <button class="btn-delete-modal" id="confirmDeleteBtn">Delete User</button>
             </div>
         </div>
     </div>

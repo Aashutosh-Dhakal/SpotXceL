@@ -9,6 +9,28 @@
 
 {% block content %}
     <div class="container">
+
+        <!-- Alert Messages -->
+        {% if messages %}
+            {% for message in messages %}
+            <div class="alert-card {% if message.tags %}alert-{{ message.tags }}{% else %}alert-info{% endif %}">
+                {% if message.tags == 'success' %}
+                    <i class="fas fa-check-circle alert-icon"></i>
+                {% elif message.tags == 'warning' %}
+                    <i class="fas fa-exclamation-triangle alert-icon"></i>
+                {% elif message.tags == 'error' %}
+                    <i class="fas fa-exclamation-circle alert-icon"></i>
+                {% else %}
+                    <i class="fas fa-info-circle alert-icon"></i>
+                {% endif %}
+                <div class="alert-content">
+                    <p class="alert-message">{{ message }}</p>
+                </div>
+                <button class="alert-close" onclick="this.parentElement.style.display='none'"><i class="fas fa-times"></i></button>
+            </div>
+            {% endfor %}
+        {% endif %}
+
         <!-- Navigation Tabs -->
         <div class="nav-tabs">
             <a href="{% url 'parking_monitoring' %}" class="nav-tab">
@@ -70,18 +92,26 @@
                 <table class="records-table">
                     <thead>
                         <tr>
-                            <th>Vehicle License</th>
-                            <th>Slot ID</th>
+                            <th>Session ID</th>
                             <th>Entry Time</th>
                             <th>Exit Time</th>
                             <th>Duration</th>
-                            <th>Fee Charged</th>
-                            <th class="text-right">Status</th>
+                            <th>Slot ID</th>
+                            <th>Vehicle ID</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <!-- Record 1 - Active -->
+                        {% comment %} <!-- Record 1 - Active -->
                         <tr>
+                            <td>
+                                <span class="session-id">PS-2024-1001</span>
+                            </td>
+                            <td class="text-secondary">Oct 25, 14:30</td>
+                            <td class="text-secondary">-</td>
+                            <td class="duration-active">1h 15m (Active)</td>
+                            <td>
+                                <span class="slot-badge">A-102</span>
+                            </td>
                             <td>
                                 <div class="vehicle-info">
                                     <div class="vehicle-icon active">
@@ -90,20 +120,19 @@
                                     <div class="vehicle-number">KA-05-MV-4321</div>
                                 </div>
                             </td>
-                            <td>
-                                <span class="slot-badge">A-102</span>
-                            </td>
-                            <td class="text-secondary">Oct 25, 14:30</td>
-                            <td class="text-secondary">-</td>
-                            <td class="duration-active">1h 15m (Active)</td>
-                            <td class="text-muted">Pending</td>
-                            <td>
-                                <span class="status-badge status-occupied">Occupied</span>
-                            </td>
                         </tr>
 
                         <!-- Record 2 - Completed -->
                         <tr>
+                            <td>
+                                <span class="session-id">PS-2024-1002</span>
+                            </td>
+                            <td class="text-secondary">Oct 25, 10:00</td>
+                            <td class="text-secondary">Oct 25, 12:45</td>
+                            <td class="text-secondary">2h 45m</td>
+                            <td>
+                                <span class="slot-badge">B-05</span>
+                            </td>
                             <td>
                                 <div class="vehicle-info">
                                     <div class="vehicle-icon">
@@ -112,20 +141,19 @@
                                     <div class="vehicle-number">TN-02-AB-9988</div>
                                 </div>
                             </td>
-                            <td>
-                                <span class="slot-badge">B-05</span>
-                            </td>
-                            <td class="text-secondary">Oct 25, 10:00</td>
-                            <td class="text-secondary">Oct 25, 12:45</td>
-                            <td class="text-secondary">2h 45m</td>
-                            <td class="fee-amount">$8.25</td>
-                            <td>
-                                <span class="status-badge status-completed">Completed</span>
-                            </td>
                         </tr>
 
                         <!-- Record 3 - Completed -->
                         <tr>
+                            <td>
+                                <span class="session-id">PS-2024-1003</span>
+                            </td>
+                            <td class="text-secondary">Oct 25, 09:15</td>
+                            <td class="text-secondary">Oct 25, 10:30</td>
+                            <td class="text-secondary">1h 15m</td>
+                            <td>
+                                <span class="slot-badge">A-108</span>
+                            </td>
                             <td>
                                 <div class="vehicle-info">
                                     <div class="vehicle-icon">
@@ -134,20 +162,19 @@
                                     <div class="vehicle-number">MH-12-XY-1234</div>
                                 </div>
                             </td>
-                            <td>
-                                <span class="slot-badge">A-108</span>
-                            </td>
-                            <td class="text-secondary">Oct 25, 09:15</td>
-                            <td class="text-secondary">Oct 25, 10:30</td>
-                            <td class="text-secondary">1h 15m</td>
-                            <td class="fee-amount">$3.75</td>
-                            <td>
-                                <span class="status-badge status-completed">Completed</span>
-                            </td>
                         </tr>
 
                         <!-- Record 4 - Completed -->
                         <tr>
+                            <td>
+                                <span class="session-id">PS-2024-1004</span>
+                            </td>
+                            <td class="text-secondary">Oct 24, 18:00</td>
+                            <td class="text-secondary">Oct 24, 21:00</td>
+                            <td class="text-secondary">3h 00m</td>
+                            <td>
+                                <span class="slot-badge">C-305</span>
+                            </td>
                             <td>
                                 <div class="vehicle-info">
                                     <div class="vehicle-icon">
@@ -156,20 +183,19 @@
                                     <div class="vehicle-number">DL-08-CD-6789</div>
                                 </div>
                             </td>
-                            <td>
-                                <span class="slot-badge">C-305</span>
-                            </td>
-                            <td class="text-secondary">Oct 24, 18:00</td>
-                            <td class="text-secondary">Oct 24, 21:00</td>
-                            <td class="text-secondary">3h 00m</td>
-                            <td class="fee-amount">$9.00</td>
-                            <td>
-                                <span class="status-badge status-completed">Completed</span>
-                            </td>
                         </tr>
 
                         <!-- Record 5 - Completed -->
                         <tr>
+                            <td>
+                                <span class="session-id">PS-2024-1005</span>
+                            </td>
+                            <td class="text-secondary">Oct 24, 08:30</td>
+                            <td class="text-secondary">Oct 24, 09:30</td>
+                            <td class="text-secondary">1h 00m</td>
+                            <td>
+                                <span class="slot-badge">B-022</span>
+                            </td>
                             <td>
                                 <div class="vehicle-info">
                                     <div class="vehicle-icon">
@@ -178,17 +204,7 @@
                                     <div class="vehicle-number">KL-01-EF-4567</div>
                                 </div>
                             </td>
-                            <td>
-                                <span class="slot-badge">B-022</span>
-                            </td>
-                            <td class="text-secondary">Oct 24, 08:30</td>
-                            <td class="text-secondary">Oct 24, 09:30</td>
-                            <td class="text-secondary">1h 00m</td>
-                            <td class="fee-amount">$3.00</td>
-                            <td>
-                                <span class="status-badge status-completed">Completed</span>
-                            </td>
-                        </tr>
+                        </tr> {% endcomment %}
                     </tbody>
                 </table>
             </div>

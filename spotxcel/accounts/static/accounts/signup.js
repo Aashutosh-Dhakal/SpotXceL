@@ -14,7 +14,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const strengthText = document.getElementById('strength-text');
     const alertCard = document.getElementById('alert-card');
     const alertMessage = document.getElementById('alert-message');
-    const alertClose = document.getElementById('alert-close');
 
     // Show alert message
     function showAlert(message) {
@@ -34,11 +33,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Hide alert message
     function hideAlert() {
         alertCard.style.display = 'none';
-    }
-
-    // Alert close button
-    if (alertClose) {
-        alertClose.addEventListener('click', hideAlert);
     }
 
     // Password visibility toggle
@@ -176,15 +170,6 @@ document.addEventListener('DOMContentLoaded', function() {
             return false;
         }
         
-        // Check for uppercase letters
-        if (/[A-Z]/.test(username)) {
-            e.preventDefault();
-            showAlert('Username cannot contain uppercase letters.');
-            usernameInput.classList.add('input-error');
-            usernameInput.focus();
-            return false;
-        }
-        
         // Check for spaces
         if (/\s/.test(username)) {
             e.preventDefault();
@@ -194,10 +179,10 @@ document.addEventListener('DOMContentLoaded', function() {
             return false;
         }
         
-        // Check for invalid special characters (only allow underscore, hyphen, and alphanumeric)
-        if (!/^[a-z0-9_-]+$/.test(username)) {
+        // Check for invalid special characters (allow first letter uppercase, rest lowercase with numbers, underscore, hyphen)
+        if (!/^[A-Za-z][a-z0-9_-]*$/.test(username)) {
             e.preventDefault();
-            showAlert('Username can only contain lowercase letters, numbers, underscore, and hyphen.');
+            showAlert('Username must start with a letter and can only contain letters (first letter can be uppercase), numbers, underscore, and hyphen.');
             usernameInput.classList.add('input-error');
             usernameInput.focus();
             return false;

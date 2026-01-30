@@ -1,0 +1,137 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block title %}Dashboard - SpotXceL{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'dashboards/user_dashboard.css' %}">
+{% endblock %}
+
+{% block content %}
+    <div class="container">
+        <!-- Alert Messages -->
+        {% if messages %}
+            {% for message in messages %}
+            <div class="alert-card {% if message.tags %}alert-{{ message.tags }}{% else %}alert-info{% endif %}">
+                {% if message.tags == 'success' %}
+                    <i class="fas fa-check-circle alert-icon"></i>
+                {% elif message.tags == 'warning' %}
+                    <i class="fas fa-exclamation-triangle alert-icon"></i>
+                {% elif message.tags == 'error' %}
+                    <i class="fas fa-exclamation-circle alert-icon"></i>
+                {% else %}
+                    <i class="fas fa-info-circle alert-icon"></i>
+                {% endif %}
+                <div class="alert-content">
+                    <p class="alert-message">{{ message }}</p>
+                </div>
+            </div>
+            {% endfor %}
+        {% endif %}
+
+        <!-- Page Header -->
+        <div class="page-header">
+            <h1>User Dashboard | Monitor</h1>
+            <p>Real-time surveillance and analytics</p>
+        </div>
+
+        <!-- Dashboard Content -->
+        <div class="dashboard-content">
+            <!-- Camera Feed Card -->
+            <div class="camera-card">
+                <div class="camera-header">
+                    <div class="camera-title">
+                        <i class="fas fa-video"></i>
+                        <span>Parking Space Feed</span>
+                    </div>
+                    <div class="live-badge">
+                        <span class="live-dot"></span>
+                        <span class="live-text">Live Detection</span>
+                    </div>
+                </div>
+                
+                <div class="camera-feed">
+                    <img src="https://images.unsplash.com/photo-1506521781263-d8422e82f27a?w=800&h=450&fit=crop" alt="Parking Lot Top View">
+                    <div class="grid-overlay"></div>
+                    
+                    <!-- Stats Overlay -->
+                    <div class="stats-overlay">
+                        <div class="stat-card total">
+                            <p class="stat-label">Total Capacity</p>
+                            <p class="stat-value">0</p>
+                        </div>
+                        <div class="stat-card available">
+                            <p class="stat-label">Available</p>
+                            <p class="stat-value">0</p>
+                        </div>
+                        <div class="stat-card occupied">
+                            <p class="stat-label">Occupied</p>
+                            <p class="stat-value">0</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- My Vehicle Card -->
+            <div class="vehicle-card">
+                <div class="vehicle-header">
+                    <h3>My Vehicle</h3>
+                    <span class="vehicle-plate">XXX-XXX</span>
+                </div>
+                
+                <div class="vehicle-content">
+                    <div class="vehicle-location">
+                        <div class="location-icon">
+                            <i class="fas fa-parking"></i>
+                        </div>
+                        <div class="location-info">
+                            <p class="location-label">Current Location</p>
+                            <p class="location-value">-</p>
+                        </div>
+                    </div>
+                    
+                    <div class="divider"></div>
+                    
+                    <div class="vehicle-details">
+                        <div class="detail-row">
+                            <span class="detail-label">Duration</span>
+                            <span class="detail-value">-</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Current Fee</span>
+                            <span class="detail-value fee">-</span>
+                        </div>
+                    </div>
+                    
+                    <div class="highlight-section">
+                        <label class="highlight-toggle">
+                            <span class="toggle-label">
+                                <i class="fas fa-map-marker-alt"></i>
+                                Highlight on Map
+                            </span>
+                            <div class="toggle-switch">
+                                <input type="checkbox" id="highlightToggle" checked>
+                                <span class="toggle-slider"></span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+    <script src="{% static 'dashboards/user_dashboard.js' %}"></script>
+    <script>
+        // Auto-close server-side alert messages after 5 seconds
+        document.addEventListener('DOMContentLoaded', function() {
+            const serverAlerts = document.querySelectorAll('.alert-card');
+            serverAlerts.forEach(alert => {
+                setTimeout(() => {
+                    alert.style.display = 'none';
+                }, 5000);
+            });
+        });
+    </script>
+{% endblock %}
