@@ -63,10 +63,27 @@
                             <i class="fas fa-circle" style="font-size: 8px;"></i>
                             <span>Vehicle Entry Feed</span>
                         </div>
-                        <div class="fps-badge">FPS: 30</div>
+                        <div class="camera-controls">
+                            <button class="device-select-btn" id="entry-select-btn" onclick="openDeviceModal('entry')" title="Select Camera Device">
+                                <i class="fas fa-video"></i>
+                                <span>Select Device</span>
+                            </button>
+                            <button class="device-remove-btn" id="entry-remove-btn" onclick="showConfirmationModal('entry')" title="Remove Video Feed" style="display: none;">
+                                <i class="fas fa-times"></i>
+                                <span>Remove Device</span>
+                            </button>
+                            <div class="live-badge">
+                                <i class="fas fa-circle"></i>
+                                <span>LIVE</span>
+                            </div>
+                        </div>
                     </div>
-                    <div class="camera-feed">
-                        <img src="{% static 'dashboards/Images/vehicle_entry.jpg' %}" alt="Parking Lot Camera 1">
+                    <div class="camera-feed" id="entry-feed">
+                        <video id="entry-video" autoplay playsinline></video>
+                        <div class="no-feed-message" id="entry-no-feed">
+                            <i class="fas fa-video-slash"></i>
+                            <p>No camera selected</p>
+                        </div>
                     </div>
                 </div>
 
@@ -77,10 +94,27 @@
                             <i class="fas fa-circle" style="font-size: 8px;"></i>
                             <span>Parking Space Feed</span>
                         </div>
-                        <div class="fps-badge">FPS: 30</div>
+                        <div class="camera-controls">
+                            <button class="device-select-btn" id="parking-select-btn" onclick="openDeviceModal('parking')" title="Select Camera Device">
+                                <i class="fas fa-video"></i>
+                                <span>Select Device</span>
+                            </button>
+                            <button class="device-remove-btn" id="parking-remove-btn" onclick="showConfirmationModal('parking')" title="Remove Video Feed" style="display: none;">
+                                <i class="fas fa-times"></i>
+                                <span>Remove Device</span>
+                            </button>
+                            <div class="live-badge">
+                                <i class="fas fa-circle"></i>
+                                <span>LIVE</span>
+                            </div>
+                        </div>
                     </div>
-                    <div class="camera-feed">
-                        <img src="https://images.unsplash.com/photo-1506521781263-d8422e82f27a?w=800&h=450&fit=crop" alt="Parking Lot Camera 2">
+                    <div class="camera-feed" id="parking-feed">
+                        <video id="parking-video" autoplay playsinline></video>
+                        <div class="no-feed-message" id="parking-no-feed">
+                            <i class="fas fa-video-slash"></i>
+                            <p>No camera selected</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -117,6 +151,77 @@
                         <i class="fas fa-arrow-trend-up"></i>
                         <span>Income</span>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Device Selection Modal -->
+        <div id="deviceModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>
+                        <i class="fas fa-video"></i>
+                        Select Video Source
+                    </h3>
+                    <button class="modal-close" onclick="closeDeviceModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="modal-info">
+                        <i class="fas fa-info-circle"></i>
+                        <p>Select a video source for <strong id="feedTypeName"></strong></p>
+                    </div>
+                    
+                    <!-- Video File Upload -->
+                    <div class="source-section">
+                        <h4 class="source-title">
+                            <i class="fas fa-file-video"></i>
+                            Pre-recorded Video (Testing)
+                        </h4>
+                        <div class="file-upload-area">
+                            <input type="file" id="videoFileInput" accept="video/*" style="display: none;" onchange="handleVideoFileSelect(event)">
+                            <button class="upload-btn" onclick="document.getElementById('videoFileInput').click()">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                                <span>Choose Video File</span>
+                            </button>
+                            <p class="upload-hint">Select a video file from your computer (MP4, WebM, MOV, etc.)</p>
+                        </div>
+                    </div>
+
+                    <div class="source-divider">
+                        <span>OR</span>
+                    </div>
+
+                    <!-- Camera Devices -->
+                    <div class="source-section">
+                        <h4 class="source-title">
+                            <i class="fas fa-camera"></i>
+                            Live Camera Devices
+                        </h4>
+                        <div class="device-list" id="deviceList">
+                            <div class="loading-devices">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                <p>Detecting available cameras...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-cancel-modal" onclick="closeDeviceModal()">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Confirmation Modal -->
+        <div class="confirmation-modal" id="confirmationModal">
+            <div class="confirmation-modal-content">
+                <div class="confirmation-icon">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <h3 class="confirmation-title">Confirm Removal</h3>
+                <p class="confirmation-message" id="confirmationMessage">Are you sure you want to remove this video feed?</p>
+                <div class="confirmation-actions">
+                    <button class="btn-confirm-cancel" onclick="closeConfirmationModal()">Cancel</button>
+                    <button class="btn-confirm-yes" id="confirmYesBtn">Yes, Remove</button>
                 </div>
             </div>
         </div>
