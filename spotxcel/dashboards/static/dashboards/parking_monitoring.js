@@ -12,14 +12,195 @@ let entryStream = null;
 let parkingStream = null;
 let entryVideoSource = null; // 'camera' or 'file'
 let parkingVideoSource = null; // 'camera' or 'file'
+let entryFileObjectUrl = null;
+let parkingFileObjectUrl = null;
+
+const ENTRY_PROCESS_ENDPOINT = '/dashboards/api/license-plate/frame/';
+const ENTRY_PROCESS_INTERVAL_MS = 100;
+
+const entryCaptureCanvas = document.createElement('canvas');
+const entryCaptureContext = entryCaptureCanvas.getContext('2d', { willReadFrequently: true });
+let entryProcessingActive = false;
+let entryProcessingRafId = null;
+let entryRequestInFlight = false;
+let entryLastFrameSentAt = 0;
+let entryLastRenderedObjectUrl = null;
+let entryBackendErrorShown = false;
+
+function getEntryVideoElement() {
+    return document.getElementById('entry-video');
+}
+
+function getEntryProcessedImageElement() {
+    return document.getElementById('entry-processed-feed');
+}
+
+function getCSRFToken() {
+    const cookieValue = document.cookie
+        .split('; ')
+        .find(cookie => cookie.startsWith('csrftoken='));
+    return cookieValue ? decodeURIComponent(cookieValue.split('=')[1]) : '';
+}
+
+function scheduleNextEntryProcessingFrame() {
+    if (!entryProcessingActive) {
+        return;
+    }
+    entryProcessingRafId = window.requestAnimationFrame(processEntryFrame);
+}
+
+function stopEntryModelProcessing() {
+    entryProcessingActive = false;
+    entryRequestInFlight = false;
+    entryLastFrameSentAt = 0;
+    entryBackendErrorShown = false;
+
+    if (entryProcessingRafId) {
+        window.cancelAnimationFrame(entryProcessingRafId);
+        entryProcessingRafId = null;
+    }
+
+    if (entryLastRenderedObjectUrl) {
+        URL.revokeObjectURL(entryLastRenderedObjectUrl);
+        entryLastRenderedObjectUrl = null;
+    }
+
+    const processedImage = getEntryProcessedImageElement();
+    if (processedImage) {
+        processedImage.removeAttribute('src');
+        processedImage.style.display = 'none';
+    }
+}
+
+function startEntryModelProcessing() {
+    const entryVideo = getEntryVideoElement();
+    const processedImage = getEntryProcessedImageElement();
+    if (!entryVideo || !processedImage) {
+        return;
+    }
+
+    stopEntryModelProcessing();
+    entryProcessingActive = true;
+    entryBackendErrorShown = false;
+    processedImage.style.display = 'block';
+    entryVideo.style.display = 'none';
+
+    scheduleNextEntryProcessingFrame();
+}
+
+async function processEntryFrame() {
+    if (!entryProcessingActive) {
+        return;
+    }
+
+    const entryVideo = getEntryVideoElement();
+    const processedImage = getEntryProcessedImageElement();
+    if (!entryVideo || !processedImage) {
+        scheduleNextEntryProcessingFrame();
+        return;
+    }
+
+    if (entryRequestInFlight) {
+        scheduleNextEntryProcessingFrame();
+        return;
+    }
+
+    const now = performance.now();
+    if (now - entryLastFrameSentAt < ENTRY_PROCESS_INTERVAL_MS) {
+        scheduleNextEntryProcessingFrame();
+        return;
+    }
+
+    if (entryVideo.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || !entryVideo.videoWidth || !entryVideo.videoHeight) {
+        scheduleNextEntryProcessingFrame();
+        return;
+    }
+
+    const targetWidth = 640;
+    const scale = targetWidth / entryVideo.videoWidth;
+    const targetHeight = Math.max(1, Math.round(entryVideo.videoHeight * scale));
+
+    entryCaptureCanvas.width = targetWidth;
+    entryCaptureCanvas.height = targetHeight;
+    entryCaptureContext.drawImage(entryVideo, 0, 0, targetWidth, targetHeight);
+
+    entryRequestInFlight = true;
+    entryLastFrameSentAt = now;
+
+    entryCaptureCanvas.toBlob(async (blob) => {
+        if (!entryProcessingActive) {
+            entryRequestInFlight = false;
+            return;
+        }
+
+        if (!blob) {
+            entryRequestInFlight = false;
+            scheduleNextEntryProcessingFrame();
+            return;
+        }
+
+        try {
+            const formData = new FormData();
+            formData.append('frame', blob, 'entry-frame.jpg');
+
+            const response = await fetch(ENTRY_PROCESS_ENDPOINT, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'X-CSRFToken': getCSRFToken(),
+                },
+                body: formData,
+            });
+
+            if (!response.ok) {
+                let errorMessage = 'Processing request failed.';
+                try {
+                    const errorData = await response.json();
+                    if (errorData && errorData.error) {
+                        errorMessage = errorData.error;
+                    }
+                } catch (error) {
+                    console.error('Failed to parse processing error response:', error);
+                }
+                throw new Error(errorMessage);
+            }
+
+            const processedBlob = await response.blob();
+            if (!entryProcessingActive) {
+                entryRequestInFlight = false;
+                return;
+            }
+
+            const nextObjectUrl = URL.createObjectURL(processedBlob);
+            processedImage.src = nextObjectUrl;
+            processedImage.style.display = 'block';
+
+            if (entryLastRenderedObjectUrl) {
+                URL.revokeObjectURL(entryLastRenderedObjectUrl);
+            }
+            entryLastRenderedObjectUrl = nextObjectUrl;
+        } catch (error) {
+            console.error('Vehicle entry AI processing failed:', error);
+            if (!entryBackendErrorShown) {
+                alert(`Vehicle Entry Feed AI processing error: ${error.message}`);
+                entryBackendErrorShown = true;
+            }
+        } finally {
+            entryRequestInFlight = false;
+            scheduleNextEntryProcessingFrame();
+        }
+    }, 'image/jpeg', 0.65);
+}
 
 // Open device selection modal
 function openDeviceModal(feedType) {
     currentFeedType = feedType;
     const modal = document.getElementById('deviceModal');
     const feedTypeName = document.getElementById('feedTypeName');
-    
-    feedTypeName.textContent = feedType === 'entry' ? 'Vehicle Entry Feed' : 'Parking Space Feed';
+
+    if (feedTypeName) {
+        feedTypeName.textContent = feedType === 'entry' ? 'Vehicle Entry Feed' : 'Parking Space Feed';
+    }
     modal.classList.add('show');
     modal.style.display = 'flex';
     
@@ -62,9 +243,24 @@ function handleVideoFileSelect(event) {
         parkingStream.getTracks().forEach(track => track.stop());
         parkingStream = null;
     }
+
+    if (currentFeedType === 'entry') {
+        stopEntryModelProcessing();
+    }
     
     // Create URL for the video file
     const videoURL = URL.createObjectURL(file);
+    if (currentFeedType === 'entry') {
+        if (entryFileObjectUrl) {
+            URL.revokeObjectURL(entryFileObjectUrl);
+        }
+        entryFileObjectUrl = videoURL;
+    } else {
+        if (parkingFileObjectUrl) {
+            URL.revokeObjectURL(parkingFileObjectUrl);
+        }
+        parkingFileObjectUrl = videoURL;
+    }
     
     // Set video source
     const videoElement = document.getElementById(`${currentFeedType}-video`);
@@ -84,6 +280,7 @@ function handleVideoFileSelect(event) {
         // Save source type
         if (currentFeedType === 'entry') {
             entryVideoSource = 'file';
+            startEntryModelProcessing();
         } else {
             parkingVideoSource = 'file';
         }
@@ -147,22 +344,44 @@ function removeVideoFeed(feedType) {
     
     const videoElement = document.getElementById(`${feedType}-video`);
     const noFeedMessage = document.getElementById(`${feedType}-no-feed`);
+
+    if (feedType === 'entry') {
+        stopEntryModelProcessing();
+        entryVideoSource = null;
+    }
     
     // Stop camera stream if active
     if (feedType === 'entry' && entryStream) {
         entryStream.getTracks().forEach(track => track.stop());
         entryStream = null;
-        entryVideoSource = null;
     } else if (feedType === 'parking' && parkingStream) {
         parkingStream.getTracks().forEach(track => track.stop());
         parkingStream = null;
         parkingVideoSource = null;
+    }
+
+    if (feedType === 'entry' && entryFileObjectUrl) {
+        URL.revokeObjectURL(entryFileObjectUrl);
+        entryFileObjectUrl = null;
+    }
+
+    if (feedType === 'parking' && parkingFileObjectUrl) {
+        URL.revokeObjectURL(parkingFileObjectUrl);
+        parkingFileObjectUrl = null;
     }
     
     // Clear video element
     videoElement.srcObject = null;
     videoElement.src = '';
     videoElement.style.display = 'none';
+
+    if (feedType === 'entry') {
+        const processedImage = getEntryProcessedImageElement();
+        if (processedImage) {
+            processedImage.removeAttribute('src');
+            processedImage.style.display = 'none';
+        }
+    }
     
     // Show no feed message
     noFeedMessage.style.display = 'flex';
@@ -270,6 +489,7 @@ async function selectDevice(deviceId, deviceLabel) {
         // Stop existing stream if any
         if (currentFeedType === 'entry' && entryStream) {
             entryStream.getTracks().forEach(track => track.stop());
+            stopEntryModelProcessing();
         } else if (currentFeedType === 'parking' && parkingStream) {
             parkingStream.getTracks().forEach(track => track.stop());
         }
@@ -285,16 +505,18 @@ async function selectDevice(deviceId, deviceLabel) {
         
         videoElement.srcObject = stream;
         videoElement.src = ''; // Clear any file source
-        videoElement.style.display = 'block';
         noFeedMessage.style.display = 'none';
         
         // Store stream reference
         if (currentFeedType === 'entry') {
             entryStream = stream;
             entryVideoSource = 'camera';
+            await videoElement.play();
+            startEntryModelProcessing();
         } else {
             parkingStream = stream;
             parkingVideoSource = 'camera';
+            videoElement.style.display = 'block';
         }
         
         // Save selection to localStorage
@@ -331,10 +553,11 @@ async function restoreSavedCameras() {
                 const videoElement = document.getElementById('entry-video');
                 const noFeedMessage = document.getElementById('entry-no-feed');
                 videoElement.srcObject = stream;
-                videoElement.style.display = 'block';
                 noFeedMessage.style.display = 'none';
                 entryStream = stream;
                 entryVideoSource = 'camera';
+                await videoElement.play();
+                startEntryModelProcessing();
                 showRemoveButton('entry');
                 hideSelectButton('entry');
             } catch (error) {
@@ -389,10 +612,19 @@ window.onclick = function(event) {
 
 // Clean up streams when page is unloaded
 window.addEventListener('beforeunload', function() {
+    stopEntryModelProcessing();
+
     if (entryStream) {
         entryStream.getTracks().forEach(track => track.stop());
     }
     if (parkingStream) {
         parkingStream.getTracks().forEach(track => track.stop());
+    }
+
+    if (entryFileObjectUrl) {
+        URL.revokeObjectURL(entryFileObjectUrl);
+    }
+    if (parkingFileObjectUrl) {
+        URL.revokeObjectURL(parkingFileObjectUrl);
     }
 });

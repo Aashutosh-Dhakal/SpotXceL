@@ -1,7 +1,49 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.db.models import Q
+from django.http import JsonResponse, HttpResponse
+from django.views.decorators.http import require_POST
+from django.conf import settings
+from pathlib import Path
+from threading import Lock
+
+import cv2
+import numpy as np
+from ultralytics import YOLO
+
 from accounts.models import User
+
+
+MODEL_PATH = Path(settings.BASE_DIR) / 'models' / 'LicensePlateDetection' / 'my_model.pt'
+_model = None
+_model_load_error = None
+_model_init_lock = Lock()
+_inference_lock = Lock()
+
+
+def _get_license_plate_model():
+    """Load license plate model once and reuse it for subsequent requests."""
+    global _model, _model_load_error
+
+    if _model is not None:
+        return _model
+
+    with _model_init_lock:
+        if _model is not None:
+            return _model
+        if _model_load_error is not None:
+            raise RuntimeError(_model_load_error)
+
+        if not MODEL_PATH.exists():
+            _model_load_error = f'Model file not found at {MODEL_PATH}'
+            raise RuntimeError(_model_load_error)
+
+        try:
+            _model = YOLO(str(MODEL_PATH))
+            return _model
+        except Exception as exc:
+            _model_load_error = f'Failed to load model: {exc}'
+            raise RuntimeError(_model_load_error) from exc
 
 
 def parking_monitoring(request):
@@ -11,6 +53,52 @@ def parking_monitoring(request):
         return redirect('login')
     
     return render(request, 'dashboards/parking_monitoring.html')
+
+
+@require_POST
+def process_entry_frame(request):
+    """Process a frame through the license plate model and return annotated JPEG."""
+    if not request.session.get('user_id'):
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+
+    frame_file = request.FILES.get('frame')
+    if not frame_file:
+        return JsonResponse({'error': 'Missing frame payload'}, status=400)
+
+    try:
+        frame_bytes = frame_file.read()
+        np_frame = np.frombuffer(frame_bytes, dtype=np.uint8)
+        frame = cv2.imdecode(np_frame, cv2.IMREAD_COLOR)
+        if frame is None:
+            return JsonResponse({'error': 'Invalid image frame'}, status=400)
+
+        model = _get_license_plate_model()
+        with _inference_lock:
+            results = model.predict(
+                source=frame,
+                conf=0.25,
+                iou=0.45,
+                imgsz=640,
+                verbose=False,
+                device='cpu',
+            )
+
+        annotated_frame = results[0].plot()
+        ok, encoded = cv2.imencode(
+            '.jpg',
+            annotated_frame,
+            [int(cv2.IMWRITE_JPEG_QUALITY), 75],
+        )
+        if not ok:
+            return JsonResponse({'error': 'Failed to encode processed frame'}, status=500)
+
+        response = HttpResponse(encoded.tobytes(), content_type='image/jpeg')
+        response['Cache-Control'] = 'no-store'
+        return response
+    except RuntimeError as exc:
+        return JsonResponse({'error': str(exc)}, status=500)
+    except Exception as exc:
+        return JsonResponse({'error': f'Frame processing failed: {exc}'}, status=500)
 
 
 def user_management(request):
