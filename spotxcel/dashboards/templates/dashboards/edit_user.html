@@ -30,40 +30,43 @@
         {% endif %}
 
         <div class="edit-form-card">
-            <h2>Edit User Details</h2>
+            <div class="card-header">
+                <h2>Edit User Details</h2>
+                <p>Update user information below</p>
+            </div>
             
             <form method="POST" id="edit-user-form">
                 {% csrf_token %}
                 
-                <div class="form-group">
-                    <label>User ID</label>
-                    <input type="text" value="{{ user.user_id }}" disabled>
-                </div>
-                
-                <div class="form-group">
-                    <label for="username">Username</label>
-                    <input type="text" id="username" name="username" value="{{ user.username }}" required>
-                </div>
-                
-                <div class="form-group">
-                    <label>Email</label>
-                    <input type="text" value="{{ user.email }}" disabled>
-                </div>
-                
-                <div class="form-group">
-                    <label for="role">Role</label>
-                    <select id="role" name="role" required>
-                        <option value="admin" {% if user.role == 'admin' %}selected{% endif %}>Admin</option>
-                        <option value="driver" {% if user.role == 'driver' %}selected{% endif %}>Driver</option>
-                    </select>
-                </div>
-                
-                <div class="form-actions">
-                    <button type="submit" class="btn-submit">Update User</button>
-                    <div class="btn-group">
-                        <button type="button" class="btn-cancel" id="cancel-btn">Cancel</button>
-                        <a href="{% url 'user_management' %}" class="btn-back">Go Back</a>
+                <div class="card-body">
+                    <div class="form-group">
+                        <label>User ID</label>
+                        <input type="text" value="{{ user.user_id }}" disabled>
                     </div>
+                    
+                    <div class="form-group">
+                        <label for="username">Username</label>
+                        <input type="text" id="username" name="username" value="{{ user.username }}" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="text" value="{{ user.email }}" disabled>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="role">Role</label>
+                        <select id="role" name="role" required>
+                            <option value="admin" {% if user.role == 'admin' %}selected{% endif %}>Admin</option>
+                            <option value="driver" {% if user.role == 'driver' %}selected{% endif %}>Driver</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="card-footer">
+                    <a href="{% url 'user_management' %}" class="btn-back"><i class="fas fa-arrow-left"></i> Go Back</a>
+                    <button type="button" class="btn-cancel" id="cancel-btn">Cancel</button>
+                    <button type="submit" class="btn-save">Update User</button>
                 </div>
             </form>
         </div>

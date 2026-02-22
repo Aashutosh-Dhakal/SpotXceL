@@ -34,7 +34,7 @@
             <div class="page-header">
                 <div class="header-content">
                     <div class="header-text">
-                        <h1><i class="fas fa-user-circle"></i> Profile Settings</h1>
+                        <h1><i class="fas fa-user-circle"></i>Profile Settings</h1>
                         <p>Manage your account information, security, and vehicle details</p>
                     </div>
                     <a href="{% if request.session.role == 'admin' %}{% url 'parking_monitoring' %}{% else %}{% url 'user_dashboard' %}{% endif %}" class="btn-back-home">
@@ -50,7 +50,7 @@
                 <!-- Profile Overview Card -->
                 <div class="profile-overview-card">
                     <div class="user-avatar">
-                        <i class="fas fa-user-circle"></i>
+                        <i class="fas fa-user"></i>
                     </div>
                     <div class="user-info-summary">
                         <div>
@@ -61,12 +61,19 @@
                     </div>
                 </div>
 
+                <!-- Account Details Section -->
+                <div class="section-label">
+                    <i class="fas fa-sliders-h"></i>
+                    <h2>Account Details</h2>
+                    <div class="section-label-line"></div>
+                </div>
+
                 <div class="cards-grid">
                     <!-- Personal Information Card -->
                     <div class="info-card">
                         <div class="card-header">
                             <h3><i class="fas fa-user"></i> Personal Information</h3>
-                            <p>Update your personal details</p>
+                            <p>Update your details</p>
                         </div>
                         <div class="card-body">
                             <div class="form-group">
@@ -112,14 +119,20 @@
                                     <input type="password" id="new_password" name="new_password" 
                                            placeholder="Enter new password">
                                 </div>
-                                <p class="input-hint"><i class="fas fa-info-circle"></i> Leave blank to keep your current password. Minimum 8 characters.</p>
+                                <p class="input-hint"><i class="fas fa-info-circle"></i> Leave blank to keep current password. Min 8 characters.</p>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Vehicles Card -->
-                <div class="info-card vehicles-card">
+                <!-- Vehicles Section -->
+                <div class="section-label">
+                    <i class="fas fa-car"></i>
+                    <h2>Registered Vehicles</h2>
+                    <div class="section-label-line"></div>
+                </div>
+
+                <div class="vehicles-card">
                     <div class="card-header">
                         <div>
                             <h3><i class="fas fa-car"></i> Your Vehicles</h3>
