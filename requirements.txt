@@ -1,4 +1,7 @@
 asgiref==3.11.0
 Django==5.2.10
+numpy
+opencv-python-headless
 psycopg2-binary==2.9.11
 sqlparse==0.5.5
+ultralytics
