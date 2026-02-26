@@ -74,7 +74,7 @@
 .live-dot {
     width: 8px;
     height: 8px;
-    background-color: #10B981;
+    background-color: #F26522;
     border-radius: 50%;
     animation: livePulse 2s infinite;
 }
@@ -87,7 +87,7 @@
 .live-text {
     font-size: 0.6875rem;
     font-weight: 700;
-    color: #10B981;
+    color: #F26522;
     text-transform: uppercase;
     letter-spacing: 0.06em;
 }

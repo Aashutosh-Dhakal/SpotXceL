@@ -317,6 +317,7 @@
     height: 100%;
     border-radius: 2px;
     transition: width 0.5s ease;
+    width: 0%;
 }
 
 .progress-fill.blue  { background: #1D4ED8; }
@@ -750,4 +751,14 @@
     .stats-section .stat-value {
         font-size: 1.5rem;
     }
+}
+
+/* Utility */
+.hidden {
+    display: none;
+}
+
+/* Status dot icon */
+.status-dot {
+    font-size: 8px;
 }

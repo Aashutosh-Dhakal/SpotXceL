@@ -1,5 +1,11 @@
 /* Login Page Specific Styles */
 
+/* Utility */
+.hidden,
+.alert-card.hidden {
+    display: none;
+}
+
 /* Auth Container */
 .auth-container {
     flex: 1;

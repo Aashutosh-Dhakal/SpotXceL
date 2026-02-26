@@ -14,6 +14,20 @@ from ultralytics import YOLO
 from accounts.models import User
 
 
+def _check_verified(request):
+    """Return redirect response if user is not verified, else None."""
+    user_id = request.session.get('user_id')
+    if not user_id:
+        return redirect('login')
+    try:
+        user = User.objects.get(user_id=user_id)
+        if not user.verified_status:
+            return redirect('verify_account')
+    except User.DoesNotExist:
+        return redirect('login')
+    return None
+
+
 MODEL_PATH = Path(settings.BASE_DIR) / 'models' / 'LicensePlateDetection' / 'my_model.pt'
 _model = None
 _model_load_error = None
@@ -51,6 +65,11 @@ def parking_monitoring(request):
     # Check if user is logged in
     if not request.session.get('user_id'):
         return redirect('login')
+    
+    # Enforce email verification
+    guard = _check_verified(request)
+    if guard:
+        return guard
     
     return render(request, 'dashboards/parking_monitoring.html')
 
@@ -106,6 +125,11 @@ def user_management(request):
     # Check if user is logged in
     if not request.session.get('user_id'):
         return redirect('login')
+    
+    # Enforce email verification
+    guard = _check_verified(request)
+    if guard:
+        return guard
     
     # Get filter parameters
     search_query = request.GET.get('search', '').strip()
@@ -233,6 +257,11 @@ def parking_records(request):
     if not request.session.get('user_id'):
         return redirect('login')
     
+    # Enforce email verification
+    guard = _check_verified(request)
+    if guard:
+        return guard
+    
     return render(request, 'dashboards/parking_records.html')
 
 
@@ -241,6 +270,11 @@ def user_dashboard(request):
     # Check if user is logged in
     if not request.session.get('user_id'):
         return redirect('login')
+    
+    # Enforce email verification
+    guard = _check_verified(request)
+    if guard:
+        return guard
     
     # Get user info from session
     username = request.session.get('username', 'User')

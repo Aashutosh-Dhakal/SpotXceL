@@ -1,5 +1,12 @@
 /* Signup Page Specific Styles */
 
+/* Utility */
+.hidden,
+.alert-card.hidden,
+.password-strength.hidden {
+    display: none;
+}
+
 /* Auth Container */
 .auth-container {
     flex: 1;

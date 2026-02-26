@@ -1,0 +1,31 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block title %}Verification Failed - SpotXceL{% endblock %}
+
+{% block extra_css %}
+<link href="{% static 'accounts/verify.css' %}" rel="stylesheet"/>
+{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="verify-card failed-card">
+        <div class="card-header">
+            <div class="verify-icon-wrapper failed">
+                <i class="fas fa-times-circle verify-hero-icon"></i>
+            </div>
+            <h1>Verification Failed</h1>
+            <p>The verification link is invalid or has expired.</p>
+        </div>
+
+        <div class="card-body">
+            <p class="footer-text footer-text-no-margin">
+                Please log in and request a new verification email.
+            </p>
+            <a href="{% url 'login' %}" class="btn-submit btn-verify btn-verify-link">
+                <i class="fas fa-sign-in-alt"></i> Go to Login
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

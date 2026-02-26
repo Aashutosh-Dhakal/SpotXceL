@@ -60,7 +60,7 @@
                 <div class="camera-card">
                     <div class="camera-header">
                         <div class="camera-title">
-                            <i class="fas fa-circle" style="font-size: 8px;"></i>
+                            <i class="fas fa-circle status-dot"></i>
                             <span>Vehicle Entry Feed</span>
                         </div>
                         <div class="camera-controls">
@@ -68,7 +68,7 @@
                                 <i class="fas fa-video"></i>
                                 <span>Select Device</span>
                             </button>
-                            <button class="device-remove-btn" id="entry-remove-btn" onclick="showConfirmationModal('entry')" title="Remove Video Feed" style="display: none;">
+                            <button class="device-remove-btn hidden" id="entry-remove-btn" onclick="showConfirmationModal('entry')" title="Remove Video Feed">
                                 <i class="fas fa-times"></i>
                                 <span>Remove Device</span>
                             </button>
@@ -80,7 +80,7 @@
                     </div>
                     <div class="camera-feed" id="entry-feed">
                         <video id="entry-video" autoplay playsinline></video>
-                        <img id="entry-processed-feed" alt="Vehicle Entry AI Feed" style="display: none;" />
+                        <img id="entry-processed-feed" class="hidden" alt="Vehicle Entry AI Feed" />
                         <div class="no-feed-message" id="entry-no-feed">
                             <i class="fas fa-video-slash"></i>
                             <p>No camera selected</p>
@@ -92,7 +92,7 @@
                 <div class="camera-card">
                     <div class="camera-header">
                         <div class="camera-title">
-                            <i class="fas fa-circle" style="font-size: 8px;"></i>
+                            <i class="fas fa-circle status-dot"></i>
                             <span>Parking Space Feed</span>
                         </div>
                         <div class="camera-controls">
@@ -100,7 +100,7 @@
                                 <i class="fas fa-video"></i>
                                 <span>Select Device</span>
                             </button>
-                            <button class="device-remove-btn" id="parking-remove-btn" onclick="showConfirmationModal('parking')" title="Remove Video Feed" style="display: none;">
+                            <button class="device-remove-btn hidden" id="parking-remove-btn" onclick="showConfirmationModal('parking')" title="Remove Video Feed">
                                 <i class="fas fa-times"></i>
                                 <span>Remove Device</span>
                             </button>
@@ -128,7 +128,7 @@
                     <div class="stat-value">0</div>
                     <i class="fas fa-square-parking stat-icon blue"></i>
                     <div class="progress-bar">
-                        <div class="progress-fill blue" style="width: 0%;"></div>
+                        <div class="progress-fill blue"></div>
                     </div>
                 </div>
 
@@ -138,7 +138,7 @@
                     <div class="stat-value">0</div>
                     <i class="fas fa-car stat-icon green"></i>
                     <div class="progress-bar">
-                        <div class="progress-fill green" id="occupancyBar" style="width: 0%;"></div>
+                        <div class="progress-fill green" id="occupancyBar"></div>
                     </div>
                     <div class="occupancy-text">0% Occupancy</div>
                 </div>
@@ -174,7 +174,7 @@
                             Pre-recorded Video (Testing)
                         </h4>
                         <div class="file-upload-area">
-                            <input type="file" id="videoFileInput" accept="video/*" style="display: none;" onchange="handleVideoFileSelect(event)">
+                            <input type="file" id="videoFileInput" accept="video/*" class="hidden" onchange="handleVideoFileSelect(event)">
                             <button class="upload-btn" onclick="document.getElementById('videoFileInput').click()">
                                 <i class="fas fa-cloud-upload-alt"></i>
                                 <span>Choose Video File</span>
