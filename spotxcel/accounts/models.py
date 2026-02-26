@@ -12,6 +12,7 @@ class User(models.Model):
     email = models.EmailField(unique=True)
     password = models.CharField(max_length=255)
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='driver')
+    verified_status = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     last_logged = models.DateTimeField(null=True, blank=True)
 
