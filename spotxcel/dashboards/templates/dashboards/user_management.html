@@ -98,6 +98,7 @@
                             <th>Username</th>
                             <th>Email</th>
                             <th>Role</th>
+                            <th>Verified</th>
                             <th>Created At</th>
                             <th>Last Logged In</th>
                             <th class="text-right">Actions</th>
@@ -124,6 +125,13 @@
                                     {% endif %}
                                 </td>
                                 <td>
+                                    {% if user.verified_status %}
+                                        <span class="badge badge-verified">Verified</span>
+                                    {% else %}
+                                        <span class="badge badge-unverified">Unverified</span>
+                                    {% endif %}
+                                </td>
+                                <td>
                                     <div class="date-cell">{{ user.created_at|date:"M d, Y H:i" }}</div>
                                 </td>
                                 <td>
@@ -147,8 +155,8 @@
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="7" style="text-align: center; padding: 40px; color: #999;">
-                                    <i class="fas fa-users" style="font-size: 48px; margin-bottom: 16px; display: block;"></i>
+                                <td colspan="8" class="empty-state-cell">
+                                    <i class="fas fa-users empty-state-icon"></i>
                                     No users found. Try adjusting your search or filters.
                                 </td>
                             </tr>

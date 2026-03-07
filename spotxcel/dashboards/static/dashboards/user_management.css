@@ -285,6 +285,18 @@
     border: 1px solid #E5E7EB;
 }
 
+.badge-verified {
+    background: #F0FDF4;
+    color: #16A34A;
+    border: 1px solid #86EFAC;
+}
+
+.badge-unverified {
+    background: #FEF2F2;
+    color: #DC2626;
+    border: 1px solid #FCA5A5;
+}
+
 /* ---- Action Buttons ---- */
 .action-buttons {
     display: flex;
@@ -552,4 +564,17 @@
         flex-direction: column;
         gap: 12px;
     }
+}
+
+/* Empty state */
+.empty-state-cell {
+    text-align: center;
+    padding: 40px;
+    color: #999;
+}
+
+.empty-state-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    display: block;
 }
