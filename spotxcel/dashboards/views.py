@@ -34,6 +34,12 @@ _model_load_error = None
 _model_init_lock = Lock()
 _inference_lock = Lock()
 
+PARKING_MODEL_PATH = Path(settings.BASE_DIR) / 'models' / 'VehicleAndParkingSpaceDetection' / 'my_model.pt'
+_parking_model = None
+_parking_model_load_error = None
+_parking_model_init_lock = Lock()
+_parking_inference_lock = Lock()
+
 
 def _get_license_plate_model():
     """Load license plate model once and reuse it for subsequent requests."""
@@ -58,6 +64,31 @@ def _get_license_plate_model():
         except Exception as exc:
             _model_load_error = f'Failed to load model: {exc}'
             raise RuntimeError(_model_load_error) from exc
+
+
+def _get_parking_space_model():
+    """Load vehicle and parking space model once and reuse it for subsequent requests."""
+    global _parking_model, _parking_model_load_error
+
+    if _parking_model is not None:
+        return _parking_model
+
+    with _parking_model_init_lock:
+        if _parking_model is not None:
+            return _parking_model
+        if _parking_model_load_error is not None:
+            raise RuntimeError(_parking_model_load_error)
+
+        if not PARKING_MODEL_PATH.exists():
+            _parking_model_load_error = f'Model file not found at {PARKING_MODEL_PATH}'
+            raise RuntimeError(_parking_model_load_error)
+
+        try:
+            _parking_model = YOLO(str(PARKING_MODEL_PATH))
+            return _parking_model
+        except Exception as exc:
+            _parking_model_load_error = f'Failed to load model: {exc}'
+            raise RuntimeError(_parking_model_load_error) from exc
 
 
 def parking_monitoring(request):
@@ -102,7 +133,53 @@ def process_entry_frame(request):
                 device='cpu',
             )
 
-        annotated_frame = results[0].plot()
+        annotated_frame = results[0].plot(labels=False, conf=False)
+        ok, encoded = cv2.imencode(
+            '.jpg',
+            annotated_frame,
+            [int(cv2.IMWRITE_JPEG_QUALITY), 75],
+        )
+        if not ok:
+            return JsonResponse({'error': 'Failed to encode processed frame'}, status=500)
+
+        response = HttpResponse(encoded.tobytes(), content_type='image/jpeg')
+        response['Cache-Control'] = 'no-store'
+        return response
+    except RuntimeError as exc:
+        return JsonResponse({'error': str(exc)}, status=500)
+    except Exception as exc:
+        return JsonResponse({'error': f'Frame processing failed: {exc}'}, status=500)
+
+
+@require_POST
+def process_parking_frame(request):
+    """Process a frame through the vehicle and parking space model and return annotated JPEG."""
+    if not request.session.get('user_id'):
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+
+    frame_file = request.FILES.get('frame')
+    if not frame_file:
+        return JsonResponse({'error': 'Missing frame payload'}, status=400)
+
+    try:
+        frame_bytes = frame_file.read()
+        np_frame = np.frombuffer(frame_bytes, dtype=np.uint8)
+        frame = cv2.imdecode(np_frame, cv2.IMREAD_COLOR)
+        if frame is None:
+            return JsonResponse({'error': 'Invalid image frame'}, status=400)
+
+        model = _get_parking_space_model()
+        with _parking_inference_lock:
+            results = model.predict(
+                source=frame,
+                conf=0.25,
+                iou=0.45,
+                imgsz=640,
+                verbose=False,
+                device='cpu',
+            )
+
+        annotated_frame = results[0].plot(labels=False, conf=False)
         ok, encoded = cv2.imencode(
             '.jpg',
             annotated_frame,

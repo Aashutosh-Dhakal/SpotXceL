@@ -18,6 +18,9 @@ let parkingFileObjectUrl = null;
 const ENTRY_PROCESS_ENDPOINT = '/dashboards/api/license-plate/frame/';
 const ENTRY_PROCESS_INTERVAL_MS = 100;
 
+const PARKING_PROCESS_ENDPOINT = '/dashboards/api/parking-space/frame/';
+const PARKING_PROCESS_INTERVAL_MS = 100;
+
 const entryCaptureCanvas = document.createElement('canvas');
 const entryCaptureContext = entryCaptureCanvas.getContext('2d', { willReadFrequently: true });
 let entryProcessingActive = false;
@@ -27,12 +30,29 @@ let entryLastFrameSentAt = 0;
 let entryLastRenderedObjectUrl = null;
 let entryBackendErrorShown = false;
 
+const parkingCaptureCanvas = document.createElement('canvas');
+const parkingCaptureContext = parkingCaptureCanvas.getContext('2d', { willReadFrequently: true });
+let parkingProcessingActive = false;
+let parkingProcessingRafId = null;
+let parkingRequestInFlight = false;
+let parkingLastFrameSentAt = 0;
+let parkingLastRenderedObjectUrl = null;
+let parkingBackendErrorShown = false;
+
 function getEntryVideoElement() {
     return document.getElementById('entry-video');
 }
 
 function getEntryProcessedImageElement() {
     return document.getElementById('entry-processed-feed');
+}
+
+function getParkingVideoElement() {
+    return document.getElementById('parking-video');
+}
+
+function getParkingProcessedImageElement() {
+    return document.getElementById('parking-processed-feed');
 }
 
 function getCSRFToken() {
@@ -47,6 +67,13 @@ function scheduleNextEntryProcessingFrame() {
         return;
     }
     entryProcessingRafId = window.requestAnimationFrame(processEntryFrame);
+}
+
+function scheduleNextParkingProcessingFrame() {
+    if (!parkingProcessingActive) {
+        return;
+    }
+    parkingProcessingRafId = window.requestAnimationFrame(processParkingFrame);
 }
 
 function stopEntryModelProcessing() {
@@ -72,6 +99,29 @@ function stopEntryModelProcessing() {
     }
 }
 
+function stopParkingModelProcessing() {
+    parkingProcessingActive = false;
+    parkingRequestInFlight = false;
+    parkingLastFrameSentAt = 0;
+    parkingBackendErrorShown = false;
+
+    if (parkingProcessingRafId) {
+        window.cancelAnimationFrame(parkingProcessingRafId);
+        parkingProcessingRafId = null;
+    }
+
+    if (parkingLastRenderedObjectUrl) {
+        URL.revokeObjectURL(parkingLastRenderedObjectUrl);
+        parkingLastRenderedObjectUrl = null;
+    }
+
+    const processedImage = getParkingProcessedImageElement();
+    if (processedImage) {
+        processedImage.removeAttribute('src');
+        processedImage.style.display = 'none';
+    }
+}
+
 function startEntryModelProcessing() {
     const entryVideo = getEntryVideoElement();
     const processedImage = getEntryProcessedImageElement();
@@ -86,6 +136,22 @@ function startEntryModelProcessing() {
     entryVideo.style.display = 'none';
 
     scheduleNextEntryProcessingFrame();
+}
+
+function startParkingModelProcessing() {
+    const parkingVideo = getParkingVideoElement();
+    const processedImage = getParkingProcessedImageElement();
+    if (!parkingVideo || !processedImage) {
+        return;
+    }
+
+    stopParkingModelProcessing();
+    parkingProcessingActive = true;
+    parkingBackendErrorShown = false;
+    processedImage.style.display = 'block';
+    parkingVideo.style.display = 'none';
+
+    scheduleNextParkingProcessingFrame();
 }
 
 async function processEntryFrame() {
@@ -192,6 +258,110 @@ async function processEntryFrame() {
     }, 'image/jpeg', 0.65);
 }
 
+async function processParkingFrame() {
+    if (!parkingProcessingActive) {
+        return;
+    }
+
+    const parkingVideo = getParkingVideoElement();
+    const processedImage = getParkingProcessedImageElement();
+    if (!parkingVideo || !processedImage) {
+        scheduleNextParkingProcessingFrame();
+        return;
+    }
+
+    if (parkingRequestInFlight) {
+        scheduleNextParkingProcessingFrame();
+        return;
+    }
+
+    const now = performance.now();
+    if (now - parkingLastFrameSentAt < PARKING_PROCESS_INTERVAL_MS) {
+        scheduleNextParkingProcessingFrame();
+        return;
+    }
+
+    if (parkingVideo.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || !parkingVideo.videoWidth || !parkingVideo.videoHeight) {
+        scheduleNextParkingProcessingFrame();
+        return;
+    }
+
+    const targetWidth = 640;
+    const scale = targetWidth / parkingVideo.videoWidth;
+    const targetHeight = Math.max(1, Math.round(parkingVideo.videoHeight * scale));
+
+    parkingCaptureCanvas.width = targetWidth;
+    parkingCaptureCanvas.height = targetHeight;
+    parkingCaptureContext.drawImage(parkingVideo, 0, 0, targetWidth, targetHeight);
+
+    parkingRequestInFlight = true;
+    parkingLastFrameSentAt = now;
+
+    parkingCaptureCanvas.toBlob(async (blob) => {
+        if (!parkingProcessingActive) {
+            parkingRequestInFlight = false;
+            return;
+        }
+
+        if (!blob) {
+            parkingRequestInFlight = false;
+            scheduleNextParkingProcessingFrame();
+            return;
+        }
+
+        try {
+            const formData = new FormData();
+            formData.append('frame', blob, 'parking-frame.jpg');
+
+            const response = await fetch(PARKING_PROCESS_ENDPOINT, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'X-CSRFToken': getCSRFToken(),
+                },
+                body: formData,
+            });
+
+            if (!response.ok) {
+                let errorMessage = 'Processing request failed.';
+                try {
+                    const errorData = await response.json();
+                    if (errorData && errorData.error) {
+                        errorMessage = errorData.error;
+                    }
+                } catch (error) {
+                    console.error('Failed to parse processing error response:', error);
+                }
+                throw new Error(errorMessage);
+            }
+
+            const processedBlob = await response.blob();
+            if (!parkingProcessingActive) {
+                parkingRequestInFlight = false;
+                return;
+            }
+
+            const nextObjectUrl = URL.createObjectURL(processedBlob);
+            processedImage.src = nextObjectUrl;
+            processedImage.style.display = 'block';
+
+            if (parkingLastRenderedObjectUrl) {
+                URL.revokeObjectURL(parkingLastRenderedObjectUrl);
+            }
+            parkingLastRenderedObjectUrl = nextObjectUrl;
+        } catch (error) {
+            console.error('Parking space AI processing failed:', error);
+            if (!parkingBackendErrorShown) {
+                alert(`Parking Space Feed AI processing error: ${error.message}`);
+                parkingBackendErrorShown = true;
+            }
+        } finally {
+            parkingRequestInFlight = false;
+            scheduleNextParkingProcessingFrame();
+        }
+    }, 'image/jpeg', 0.65);
+}
+
 // Open device selection modal
 function openDeviceModal(feedType) {
     currentFeedType = feedType;
@@ -246,6 +416,8 @@ function handleVideoFileSelect(event) {
 
     if (currentFeedType === 'entry') {
         stopEntryModelProcessing();
+    } else if (currentFeedType === 'parking') {
+        stopParkingModelProcessing();
     }
     
     // Create URL for the video file
@@ -283,6 +455,7 @@ function handleVideoFileSelect(event) {
             startEntryModelProcessing();
         } else {
             parkingVideoSource = 'file';
+            startParkingModelProcessing();
         }
         
         // Save to localStorage
@@ -348,6 +521,9 @@ function removeVideoFeed(feedType) {
     if (feedType === 'entry') {
         stopEntryModelProcessing();
         entryVideoSource = null;
+    } else if (feedType === 'parking') {
+        stopParkingModelProcessing();
+        parkingVideoSource = null;
     }
     
     // Stop camera stream if active
@@ -357,7 +533,6 @@ function removeVideoFeed(feedType) {
     } else if (feedType === 'parking' && parkingStream) {
         parkingStream.getTracks().forEach(track => track.stop());
         parkingStream = null;
-        parkingVideoSource = null;
     }
 
     if (feedType === 'entry' && entryFileObjectUrl) {
@@ -377,6 +552,12 @@ function removeVideoFeed(feedType) {
 
     if (feedType === 'entry') {
         const processedImage = getEntryProcessedImageElement();
+        if (processedImage) {
+            processedImage.removeAttribute('src');
+            processedImage.style.display = 'none';
+        }
+    } else if (feedType === 'parking') {
+        const processedImage = getParkingProcessedImageElement();
         if (processedImage) {
             processedImage.removeAttribute('src');
             processedImage.style.display = 'none';
@@ -516,7 +697,8 @@ async function selectDevice(deviceId, deviceLabel) {
         } else {
             parkingStream = stream;
             parkingVideoSource = 'camera';
-            videoElement.style.display = 'block';
+            await videoElement.play();
+            startParkingModelProcessing();
         }
         
         // Save selection to localStorage
@@ -581,10 +763,11 @@ async function restoreSavedCameras() {
                 const videoElement = document.getElementById('parking-video');
                 const noFeedMessage = document.getElementById('parking-no-feed');
                 videoElement.srcObject = stream;
-                videoElement.style.display = 'block';
                 noFeedMessage.style.display = 'none';
                 parkingStream = stream;
                 parkingVideoSource = 'camera';
+                await videoElement.play();
+                startParkingModelProcessing();
                 showRemoveButton('parking');
                 hideSelectButton('parking');
             } catch (error) {
@@ -613,6 +796,7 @@ window.onclick = function(event) {
 // Clean up streams when page is unloaded
 window.addEventListener('beforeunload', function() {
     stopEntryModelProcessing();
+    stopParkingModelProcessing();
 
     if (entryStream) {
         entryStream.getTracks().forEach(track => track.stop());
