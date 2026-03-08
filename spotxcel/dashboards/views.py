@@ -119,8 +119,6 @@ _tracker_lock = Lock()
 _IOU_THRESHOLD = 0.3
 # Plates not seen for this many seconds are considered to have exited.
 _EXIT_TIMEOUT_S = 2.0
-# Only re-run OCR on already-tracked plates every N frames.
-_OCR_RERUN_EVERY_N = 5
 
 
 def _iou(box_a, box_b):
@@ -244,6 +242,24 @@ def _update_tracker(current_detections: list[dict]):
         _active_plates.extend(remaining)
 
 
+def flush_active_plates():
+    """Flush ALL remaining active plates to CSV (e.g. when the feed stops)."""
+    with _tracker_lock:
+        for ap in _active_plates:
+            if ap['best_text'] and ap['frame_count'] > 1:
+                _write_plate_to_csv(ap)
+        _active_plates.clear()
+
+
+@require_POST
+def flush_plates_view(request):
+    """Endpoint for the frontend to flush plates when the video feed is removed."""
+    if not request.session.get('user_id'):
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+    flush_active_plates()
+    return JsonResponse({'status': 'ok'})
+
+
 def parking_monitoring(request):
     """Display the parking lot monitoring dashboard."""
     # Check if user is logged in
@@ -287,8 +303,6 @@ def process_entry_frame(request):
             )
 
         # --- OCR on detected plates & feed to tracker ---
-        # To reduce latency, only run OCR on NEW plates (no IoU match).
-        # Already-tracked plates re-run OCR every _OCR_RERUN_EVERY_N frames.
         current_detections = []
         boxes = results[0].boxes
         if boxes is not None and len(boxes):
@@ -301,30 +315,12 @@ def process_entry_frame(request):
                     continue
 
                 bbox = (x1, y1, x2, y2)
-
-                # Check if this plate is already being tracked
-                matched_ap = None
-                with _tracker_lock:
-                    for ap in _active_plates:
-                        if _iou(bbox, ap['bbox']) >= _IOU_THRESHOLD:
-                            matched_ap = ap
-                            break
-
-                run_ocr = True
-                if matched_ap is not None and matched_ap['best_text']:
-                    # Already tracked with OCR data — skip unless it's time to re-run
-                    if matched_ap['frame_count'] % _OCR_RERUN_EVERY_N != 0:
-                        run_ocr = False
-
-                if run_ocr:
-                    plate_crop = frame[y1:y2, x1:x2]
-                    try:
-                        text, conf, plate_type = recognise_plate(plate_crop)
-                    except Exception as ocr_exc:
-                        logger.warning("OCR failed for a plate region: %s", ocr_exc)
-                        text, conf, plate_type = "", 0.0, "unknown"
-                else:
-                    text, conf, plate_type = "", 0.0, matched_ap['plate_type'] if matched_ap else "unknown"
+                plate_crop = frame[y1:y2, x1:x2]
+                try:
+                    text, conf, plate_type = recognise_plate(plate_crop)
+                except Exception as ocr_exc:
+                    logger.warning("OCR failed for a plate region: %s", ocr_exc)
+                    text, conf, plate_type = "", 0.0, "unknown"
 
                 current_detections.append({
                     'bbox': bbox,

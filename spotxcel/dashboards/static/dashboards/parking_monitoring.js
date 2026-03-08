@@ -16,6 +16,7 @@ let entryFileObjectUrl = null;
 let parkingFileObjectUrl = null;
 
 const ENTRY_PROCESS_ENDPOINT = '/dashboards/api/license-plate/frame/';
+const ENTRY_FLUSH_ENDPOINT = '/dashboards/api/license-plate/flush/';
 const ENTRY_PROCESS_INTERVAL_MS = 100;
 
 const PARKING_PROCESS_ENDPOINT = '/dashboards/api/parking-space/frame/';
@@ -97,6 +98,13 @@ function stopEntryModelProcessing() {
         processedImage.removeAttribute('src');
         processedImage.style.display = 'none';
     }
+
+    // Flush any remaining tracked plates to CSV
+    fetch(ENTRY_FLUSH_ENDPOINT, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'X-CSRFToken': getCSRFToken() },
+    }).catch(err => console.error('Flush plates failed:', err));
 }
 
 function stopParkingModelProcessing() {
