@@ -78,6 +78,14 @@ def _extract_text_and_confidence(results):
     return merged, avg_conf
 
 
+def _detect_plate_type(text: str) -> str:
+    """Determine plate type from the script of recognised text."""
+    for ch in text:
+        if '\u0900' <= ch <= '\u097F':  # Devanagari Unicode block
+            return "traditional_nepali"
+    return "embossed"
+
+
 def recognise_plate(plate_image: np.ndarray) -> tuple:
     """
     Run OCR on a cropped licence-plate image.
@@ -99,5 +107,5 @@ def recognise_plate(plate_image: np.ndarray) -> tuple:
 
     # Pick whichever model is more confident
     if dev_conf > en_conf and dev_text:
-        return dev_text, dev_conf, "traditional_nepali"
-    return en_text, en_conf, "embossed"
+        return dev_text, dev_conf, _detect_plate_type(dev_text)
+    return en_text, en_conf, _detect_plate_type(en_text)
