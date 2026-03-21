@@ -1,0 +1,155 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block title %}Plate Detection History - SpotXceL{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'dashboards/parking_records.css' %}">
+    <link rel="stylesheet" href="{% static 'dashboards/plate_detection_history.css' %}">
+{% endblock %}
+
+{% block content %}
+    <div class="container">
+        {% if messages %}
+            {% for message in messages %}
+            <div class="alert-card {% if message.tags %}alert-{{ message.tags }}{% else %}alert-info{% endif %}">
+                {% if message.tags == 'success' %}
+                    <i class="fas fa-check-circle alert-icon"></i>
+                {% elif message.tags == 'warning' %}
+                    <i class="fas fa-exclamation-triangle alert-icon"></i>
+                {% elif message.tags == 'error' %}
+                    <i class="fas fa-exclamation-circle alert-icon"></i>
+                {% else %}
+                    <i class="fas fa-info-circle alert-icon"></i>
+                {% endif %}
+                <div class="alert-content">
+                    <p class="alert-message">{{ message }}</p>
+                </div>
+                <button class="alert-close" onclick="this.parentElement.style.display='none'"><i class="fas fa-times"></i></button>
+            </div>
+            {% endfor %}
+        {% endif %}
+
+        <div class="nav-tabs">
+            <a href="{% url 'parking_monitoring' %}" class="nav-tab">
+                <i class="fas fa-camera"></i>
+                <span>Parking Lot Monitoring</span>
+            </a>
+            <a href="{% url 'user_management' %}" class="nav-tab">
+                <i class="fas fa-users"></i>
+                <span>User Management System</span>
+            </a>
+            <a href="{% url 'parking_records' %}" class="nav-tab">
+                <i class="fas fa-clock"></i>
+                <span>Parking Records/History</span>
+            </a>
+            <a href="{% url 'plate_detection_history' %}" class="nav-tab active">
+                <i class="fas fa-id-card"></i>
+                <span>Plate Detection History</span>
+            </a>
+        </div>
+
+        <div class="page-header">
+            <div>
+                <h1>Plate Detection History</h1>
+                <p>Manage stored plate detections captured by the entry feed.</p>
+            </div>
+        </div>
+
+        <div class="filter-card">
+            <form method="GET" action="{% url 'plate_detection_history' %}">
+                <div class="filter-grid plate-history-filter-grid">
+                    <div class="filter-item">
+                        <label for="plate">License Plate</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="plate" name="plate" placeholder="e.g. BA 12 PA 1234" value="{{ search_query }}">
+                        </div>
+                    </div>
+                    <div class="filter-item">
+                        <label for="timestamp">Timestamp</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-calendar-alt"></i>
+                            <input type="text" id="timestamp" name="timestamp" value="{{ timestamp_query }}" placeholder="YYYY-MM-DD HH:MM">
+                        </div>
+                    </div>
+                    <div class="filter-item">
+                        <label for="plate_type">Plate Type</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-id-card"></i>
+                            <select id="plate_type" name="plate_type">
+                                <option value="">All Plate Types</option>
+                                {% for option in plate_type_options %}
+                                    <option value="{{ option }}" {% if plate_type_query == option %}selected{% endif %}>{{ option }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="filter-actions">
+                        <button class="btn-filter" type="submit">
+                            <i class="fas fa-filter"></i>
+                            Filter
+                        </button>
+                        <a class="btn-clear" href="{% url 'plate_detection_history' %}">Clear</a>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <div class="table-card">
+            <div class="table-wrapper">
+                <table class="records-table">
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>License Plate Text</th>
+                            <th>Confidence</th>
+                            <th>Plate Type</th>
+                            <th>First Seen</th>
+                            <th>Last Seen</th>
+                            <th>Frames Detected</th>
+                            <th class="text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if records %}
+                            {% for record in records %}
+                            <tr>
+                                <td class="text-secondary">{{ record.timestamp|date:'Y-m-d H:i:s' }}</td>
+                                <td><strong>{{ record.license_plate_text }}</strong></td>
+                                <td>{{ record.confidence|floatformat:4 }}</td>
+                                <td>{{ record.plate_type|capfirst }}</td>
+                                <td class="text-secondary">{{ record.first_seen|date:'Y-m-d H:i:s' }}</td>
+                                <td class="text-secondary">{{ record.last_seen|date:'Y-m-d H:i:s' }}</td>
+                                <td>{{ record.frames_detected }}</td>
+                                <td class="actions-cell">
+                                    <div class="history-actions">
+                                        <a class="history-action-btn" href="{% url 'edit_plate_detection_history' record.id %}" title="Edit Record">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        <form method="POST" action="{% url 'delete_plate_detection_history' record.id %}" onsubmit="return confirm('Delete this plate detection record?');">
+                                            {% csrf_token %}
+                                            <button type="submit" class="history-action-btn history-action-delete" title="Delete Record">
+                                                <i class="fas fa-trash-alt"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="8" class="empty-state-cell">No plate detections found.</td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="pagination-section">
+                <div class="pagination-info">
+                    <p>Showing <span class="font-medium">{{ records|length }}</span> result{{ records|length|pluralize }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

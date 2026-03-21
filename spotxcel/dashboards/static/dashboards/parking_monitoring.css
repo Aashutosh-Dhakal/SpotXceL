@@ -324,6 +324,20 @@
 .progress-fill.blue  { background: #1D4ED8; }
 .progress-fill.green { background: #B91C1C; }
 
+.capacity-note {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.75rem;
+    color: #1D4ED8;
+    font-weight: 600;
+    margin-top: 8px;
+}
+
+.capacity-note i {
+    color: #1D4ED8;
+}
+
 .occupancy-text {
     font-size: 0.75rem;
     color: #B91C1C;

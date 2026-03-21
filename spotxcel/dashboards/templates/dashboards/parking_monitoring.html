@@ -5,6 +5,7 @@
 
 {% block extra_css %}
     <link rel="stylesheet" href="{% static 'dashboards/parking_monitoring.css' %}">
+    <link rel="stylesheet" href="{% static 'dashboards/parking_editor.css' %}">
 {% endblock %}
 
 {% block content %}
@@ -43,6 +44,10 @@
             <a href="{% url 'parking_records' %}" class="nav-tab">
                 <i class="fas fa-clock"></i>
                 <span>Parking Records/History</span>
+            </a>
+            <a href="{% url 'plate_detection_history' %}" class="nav-tab">
+                <i class="fas fa-id-card"></i>
+                <span>Plate Detection History</span>
             </a>
         </div>
 
@@ -113,6 +118,7 @@
                     <div class="camera-feed" id="parking-feed">
                         <video id="parking-video" autoplay playsinline></video>
                         <img id="parking-processed-feed" class="hidden" alt="Vehicle Detection AI Feed" />
+                        <canvas id="parking-output-canvas" class="parking-output-canvas"></canvas>
                         <div class="no-feed-message" id="parking-no-feed">
                             <i class="fas fa-video-slash"></i>
                             <p>No camera selected</p>
@@ -128,8 +134,9 @@
                     <div class="stat-label">Total Capacity</div>
                     <div class="stat-value">0</div>
                     <i class="fas fa-square-parking stat-icon blue"></i>
-                    <div class="progress-bar">
-                        <div class="progress-fill blue"></div>
+                    <div class="capacity-note">
+                        <i class="fas fa-chart-simple"></i>
+                        <span id="capacityNoteValue">Configured spaces</span>
                     </div>
                 </div>
 
@@ -222,10 +229,24 @@
                 </div>
             </div>
         </div>
+
+        <div class="parking-editor-modal" id="parkingEditorModal">
+            <div class="parking-editor-modal-content">
+                <div class="parking-editor-modal-header">
+                    <h3>Parking Space Layout Editor</h3>
+                    <button type="button" class="parking-editor-modal-close" id="parkingEditorModalCloseBtn">&times;</button>
+                </div>
+                <div class="parking-editor-modal-body">
+                    <div id="parking-editor-host" class="parking-editor-host"></div>
+                </div>
+            </div>
+        </div>
     </div>
 {% endblock %}
 
 {% block extra_js %}
+    <script src="{% static 'dashboards/detection_overlay.js' %}"></script>
+    <script src="{% static 'dashboards/parking_editor.js' %}"></script>
     <script src="{% static 'dashboards/parking_monitoring.js' %}"></script>
     <script>
         // Auto-close server-side alert messages after 5 seconds

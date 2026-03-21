@@ -1,0 +1,231 @@
+.parking-editor-host {
+    position: relative;
+    width: 100%;
+    min-height: 620px;
+    display: none;
+    background: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+    padding: 10px;
+}
+
+.parking-editor-host.active {
+    display: block;
+}
+
+.parking-editor-root {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 210px;
+    gap: 10px;
+    width: 100%;
+    height: 100%;
+}
+
+.parking-editor-canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 72vh;
+    background: #111827;
+    cursor: crosshair;
+    border-radius: 6px;
+    border: 1px solid #E5E7EB;
+}
+
+.parking-editor-canvas.select-mode {
+    cursor: default;
+}
+
+.parking-editor-banner {
+    position: static;
+    background: #FFF7ED;
+    color: #9A3412;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid #FDBA74;
+    margin-bottom: 8px;
+}
+
+.parking-editor-toolbar {
+    display: grid;
+    gap: 8px;
+    width: 100%;
+    align-content: start;
+}
+
+.parking-editor-btn {
+    border: 1px solid #CBD5E1;
+    background: #FFFFFF;
+    color: #111827;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.14s ease;
+}
+
+.parking-editor-btn:hover {
+    background: #FFF7ED;
+    border-color: #FB923C;
+    transform: translateY(-1px);
+}
+
+.parking-editor-btn.active {
+    border-color: #EA580C;
+    box-shadow: 0 0 0 1px #EA580C inset, 0 4px 10px rgba(234, 88, 12, 0.15);
+}
+
+.parking-editor-btn.danger {
+    border-color: #FCA5A5;
+    background: #FFF1F2;
+    color: #B91C1C;
+}
+
+.parking-editor-btn.success {
+    border-color: #16A34A;
+    background: #16A34A;
+    color: #FFFFFF;
+}
+
+.parking-editor-btn.success:hover {
+    border-color: #15803D;
+    background: #15803D;
+}
+
+.parking-editor-start-zone {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px dashed #CBD5E1;
+}
+
+.parking-editor-btn.start {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
+    font-size: 15px;
+    padding: 12px 12px;
+    box-shadow: 0 10px 18px rgba(22, 163, 74, 0.2);
+}
+
+.parking-editor-context-menu {
+    position: fixed;
+    z-index: 10020;
+    background: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 8px 22px rgba(17, 24, 39, 0.2);
+}
+
+.parking-editor-context-menu button {
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: #1F2937;
+    text-align: left;
+    font-size: 12px;
+    padding: 8px 12px;
+    cursor: pointer;
+}
+
+.parking-editor-context-menu button:hover {
+    background: #FFF7ED;
+}
+
+.parking-output-canvas {
+    max-width: 100%;
+    max-height: 100%;
+    background: #000;
+    display: none;
+    z-index: 4;
+}
+
+.parking-editor-stage {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.parking-editor-sidepanel {
+    background: #FAFAFA;
+    border: 1px solid #E5E7EB;
+    border-radius: 6px;
+    padding: 8px;
+}
+
+.parking-editor-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    z-index: 11000;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.parking-editor-modal.show {
+    display: flex;
+}
+
+.parking-editor-modal-content {
+    width: min(1200px, 95vw);
+    max-height: 92vh;
+    background: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.parking-editor-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid #E5E7EB;
+    color: #1F2937;
+    background: #FAFAFA;
+}
+
+.parking-editor-modal-header h3 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.parking-editor-modal-close {
+    width: 34px;
+    height: 34px;
+    border: 1px solid #D1D5DB;
+    border-radius: 6px;
+    background: #FFFFFF;
+    color: #1F2937;
+    font-size: 1.2rem;
+    cursor: pointer;
+}
+
+.parking-editor-modal-close:hover {
+    background: #FFF7ED;
+    border-color: #FDBA74;
+}
+
+.parking-editor-modal-body {
+    padding: 12px;
+    overflow: auto;
+}
+
+@media (max-width: 900px) {
+    .parking-editor-root {
+        grid-template-columns: 1fr;
+    }
+}
+
+.parking-output-canvas.active {
+    display: block;
+}
