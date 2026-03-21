@@ -40,11 +40,15 @@ _model_load_error = None
 _model_init_lock = Lock()
 _inference_lock = Lock()
 
-PARKING_MODEL_PATH = Path(settings.BASE_DIR) / 'models' / 'VehicleAndParkingSpaceDetection' / 'my_model.pt'
+PARKING_MODEL_PATH = Path(settings.BASE_DIR) / 'models' / 'VehicleDetection' / 'my_model.pt'
 _parking_model = None
 _parking_model_load_error = None
 _parking_model_init_lock = Lock()
 _parking_inference_lock = Lock()
+
+ALLOWED_VEHICLE_CLASS_NAMES = {'car', 'van', 'motor'}
+VEHICLE_BOX_COLOR_BGR = (0, 200, 0)
+VEHICLE_BOX_THICKNESS = 2
 
 
 def _get_license_plate_model():
@@ -95,6 +99,53 @@ def _get_parking_space_model():
         except Exception as exc:
             _parking_model_load_error = f'Failed to load model: {exc}'
             raise RuntimeError(_parking_model_load_error) from exc
+
+
+def _get_allowed_vehicle_class_ids(model):
+    """Resolve class ids for allowed vehicle classes from the loaded model."""
+    names = getattr(model, 'names', None)
+    if names is None:
+        raise RuntimeError('Vehicle model did not expose class names.')
+
+    if isinstance(names, dict):
+        items = names.items()
+    else:
+        items = enumerate(names)
+
+    allowed_ids = [
+        int(class_id)
+        for class_id, class_name in items
+        if str(class_name).strip().lower() in ALLOWED_VEHICLE_CLASS_NAMES
+    ]
+
+    if not allowed_ids:
+        raise RuntimeError(
+            'None of the allowed classes (car, van, motor) were found in the vehicle model.'
+        )
+
+    return sorted(set(allowed_ids))
+
+
+def _draw_allowed_vehicle_boxes(frame, result, allowed_class_ids):
+    """Draw only allowed vehicle detections with a single consistent box color."""
+    annotated = frame.copy()
+    boxes = result.boxes
+    if boxes is None or len(boxes) == 0:
+        return annotated
+
+    allowed_set = set(allowed_class_ids)
+    for box in boxes:
+        if box.cls is None or len(box.cls) == 0:
+            continue
+
+        class_id = int(box.cls[0].item())
+        if class_id not in allowed_set:
+            continue
+
+        x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
+        cv2.rectangle(annotated, (x1, y1), (x2, y2), VEHICLE_BOX_COLOR_BGR, VEHICLE_BOX_THICKNESS)
+
+    return annotated
 
 
 # ---------------------------------------------------------------------------
@@ -351,7 +402,7 @@ def process_entry_frame(request):
 
 @require_POST
 def process_parking_frame(request):
-    """Process a frame through the vehicle and parking space model and return annotated JPEG."""
+    """Process a frame through the vehicle model and return annotated JPEG."""
     if not request.session.get('user_id'):
         return JsonResponse({'error': 'Unauthorized'}, status=401)
 
@@ -367,17 +418,20 @@ def process_parking_frame(request):
             return JsonResponse({'error': 'Invalid image frame'}, status=400)
 
         model = _get_parking_space_model()
+        allowed_class_ids = _get_allowed_vehicle_class_ids(model)
+
         with _parking_inference_lock:
             results = model.predict(
                 source=frame,
-                conf=0.25,
+                conf=0.50,
                 iou=0.45,
                 imgsz=640,
+                classes=allowed_class_ids,
                 verbose=False,
                 device='cpu',
             )
 
-        annotated_frame = results[0].plot(labels=False, conf=False)
+        annotated_frame = _draw_allowed_vehicle_boxes(frame, results[0], allowed_class_ids)
         ok, encoded = cv2.imencode(
             '.jpg',
             annotated_frame,

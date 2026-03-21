@@ -358,9 +358,9 @@ async function processParkingFrame() {
             }
             parkingLastRenderedObjectUrl = nextObjectUrl;
         } catch (error) {
-            console.error('Parking space AI processing failed:', error);
+            console.error('Vehicle detection AI processing failed:', error);
             if (!parkingBackendErrorShown) {
-                alert(`Parking Space Feed AI processing error: ${error.message}`);
+                alert(`Vehicle Detection Feed AI processing error: ${error.message}`);
                 parkingBackendErrorShown = true;
             }
         } finally {
@@ -377,7 +377,7 @@ function openDeviceModal(feedType) {
     const feedTypeName = document.getElementById('feedTypeName');
 
     if (feedTypeName) {
-        feedTypeName.textContent = feedType === 'entry' ? 'Vehicle Entry Feed' : 'Parking Space Feed';
+        feedTypeName.textContent = feedType === 'entry' ? 'Vehicle Entry Feed' : 'Vehicle Detection Feed';
     }
     modal.classList.add('show');
     modal.style.display = 'flex';
@@ -495,7 +495,7 @@ function showConfirmationModal(feedType) {
     const confirmBtn = document.getElementById('confirmYesBtn');
     
     pendingRemovalFeedType = feedType;
-    message.textContent = `Are you sure you want to remove the ${feedType === 'entry' ? 'Vehicle Entry' : 'Parking Space'} feed?`;
+    message.textContent = `Are you sure you want to remove the ${feedType === 'entry' ? 'Vehicle Entry' : 'Vehicle Detection'} feed?`;
     
     modal.classList.add('show');
     modal.style.display = 'flex';
