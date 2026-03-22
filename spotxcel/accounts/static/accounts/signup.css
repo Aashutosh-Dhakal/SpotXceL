@@ -347,6 +347,76 @@
     color: #d95213;
 }
 
+/* Terms Modal */
+.terms-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+
+.terms-modal.is-open {
+    display: flex;
+}
+
+.terms-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(17, 24, 39, 0.6);
+}
+
+.terms-modal-content {
+    position: relative;
+    width: 100%;
+    max-width: 700px;
+    max-height: 85vh;
+    overflow-y: auto;
+    background: #FFFFFF;
+    border-radius: 0.75rem;
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.25);
+    border: 1px solid #E5E7EB;
+    padding: 1.5rem;
+}
+
+.terms-modal-close {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    border: none;
+    background: transparent;
+    color: #6B7280;
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.terms-modal-close:hover {
+    color: #111827;
+}
+
+.terms-modal-content h2 {
+    margin: 0 0 1rem;
+    color: #111827;
+    font-size: 1.35rem;
+    font-weight: 700;
+}
+
+.terms-modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+}
+
+.terms-modal-body p {
+    margin: 0;
+    color: #374151;
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
 /* Submit Button */
 .btn-submit {
     width: 100%;
@@ -425,5 +495,15 @@
     
     .alert-card {
         margin: 0 1.5rem 1rem;
+    }
+
+    .terms-modal-content {
+        max-height: 90vh;
+        padding: 1.25rem;
+    }
+
+    .terms-modal-content h2 {
+        font-size: 1.2rem;
+        padding-right: 1.75rem;
     }
 }

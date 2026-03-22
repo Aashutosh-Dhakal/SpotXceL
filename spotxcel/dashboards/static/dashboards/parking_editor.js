@@ -39,16 +39,16 @@
                     </div>
                     <div class="parking-editor-sidepanel">
                         <div class="parking-editor-toolbar">
-                            <button type="button" class="parking-editor-btn" data-action="rectangle">✏️ Rectangle</button>
-                            <button type="button" class="parking-editor-btn" data-action="polygon">🔷 Polygon</button>
-                            <button type="button" class="parking-editor-btn" data-action="select">🖱️ Select</button>
-                            <button type="button" class="parking-editor-btn" data-action="toggle-grid"># Grid</button>
-                            <button type="button" class="parking-editor-btn danger" data-action="clear">🗑️ Clear All</button>
-                            <button type="button" class="parking-editor-btn" data-action="save">💾 Save Layout</button>
-                            <button type="button" class="parking-editor-btn" data-action="load">📂 Load Layout</button>
+                            <button type="button" class="parking-editor-btn" data-action="rectangle">Rectangle</button>
+                            <button type="button" class="parking-editor-btn" data-action="polygon">Polygon</button>
+                            <button type="button" class="parking-editor-btn" data-action="select">Select</button>
+                            <button type="button" class="parking-editor-btn" data-action="toggle-grid">Grid</button>
+                            <button type="button" class="parking-editor-btn" data-action="save">Save Layout</button>
+                            <button type="button" class="parking-editor-btn" data-action="load">Load Layout</button>
+                            <button type="button" class="parking-editor-btn danger" data-action="clear">Clear All</button>
                         </div>
                         <div class="parking-editor-start-zone">
-                            <button type="button" class="parking-editor-btn success start" data-action="start">▶️ Start Detection</button>
+                            <button type="button" class="parking-editor-btn success start" data-action="start">Start Detection</button>
                         </div>
                     </div>
                 </div>

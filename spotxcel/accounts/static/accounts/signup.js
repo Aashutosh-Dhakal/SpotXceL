@@ -14,6 +14,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const strengthText = document.getElementById('strength-text');
     const alertCard = document.getElementById('alert-card');
     const alertMessage = document.getElementById('alert-message');
+    const termsLink = document.getElementById('terms-link');
+    const termsModal = document.getElementById('terms-modal');
+    const termsModalClose = document.getElementById('terms-modal-close');
 
     // Show alert message
     function showAlert(message) {
@@ -33,6 +36,47 @@ document.addEventListener('DOMContentLoaded', function() {
     // Hide alert message
     function hideAlert() {
         alertCard.style.display = 'none';
+    }
+
+    function openTermsModal() {
+        if (!termsModal) {
+            return;
+        }
+        termsModal.classList.add('is-open');
+        termsModal.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeTermsModal() {
+        if (!termsModal) {
+            return;
+        }
+        termsModal.classList.remove('is-open');
+        termsModal.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+    }
+
+    if (termsLink && termsModal) {
+        termsLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            openTermsModal();
+        });
+
+        if (termsModalClose) {
+            termsModalClose.addEventListener('click', closeTermsModal);
+        }
+
+        termsModal.addEventListener('click', function(e) {
+            if (e.target.closest('[data-action="close-terms"]')) {
+                closeTermsModal();
+            }
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && termsModal.classList.contains('is-open')) {
+                closeTermsModal();
+            }
+        });
     }
 
     // Password visibility toggle
