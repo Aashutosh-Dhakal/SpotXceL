@@ -101,7 +101,7 @@
 .status-indicator {
     width: 8px;
     height: 8px;
-    background-color: #10B981;
+    background-color: #EA580C;
     border-radius: 50%;
     animation: statusBlink 2s infinite;
 }

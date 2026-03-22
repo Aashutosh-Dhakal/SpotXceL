@@ -51,69 +51,78 @@
                 </div>
                 
                 <div class="camera-feed">
-                    <img src="https://images.unsplash.com/photo-1506521781263-d8422e82f27a?w=800&h=450&fit=crop" alt="Parking Lot Top View">
-                    <div class="grid-overlay"></div>
-                    
-                    <!-- Stats Overlay -->
-                    <div class="stats-overlay">
-                        <div class="stat-card total">
-                            <p class="stat-label">Total Capacity</p>
-                            <p class="stat-value">0</p>
-                        </div>
-                        <div class="stat-card available">
-                            <p class="stat-label">Available</p>
-                            <p class="stat-value">0</p>
-                        </div>
-                        <div class="stat-card occupied">
-                            <p class="stat-label">Occupied</p>
-                            <p class="stat-value">0</p>
-                        </div>
+                    <video id="user-parking-video" autoplay playsinline muted style="display: none;"></video>
+                    <img id="user-parking-feed" alt="Parking Space Feed" style="display: none;">
+                    <div class="user-no-feed-message" id="user-parking-no-feed">
+                        <i class="fas fa-video-slash"></i>
+                        <p>Waiting for admin to select Vehicle Detection Feed source</p>
                     </div>
                 </div>
             </div>
 
-            <!-- My Vehicle Card -->
-            <div class="vehicle-card">
-                <div class="vehicle-header">
-                    <h3>My Vehicle</h3>
-                    <span class="vehicle-plate">XXX-XXX</span>
-                </div>
-                
-                <div class="vehicle-content">
-                    <div class="vehicle-location">
-                        <div class="location-icon">
-                            <i class="fas fa-parking"></i>
-                        </div>
-                        <div class="location-info">
-                            <p class="location-label">Current Location</p>
-                            <p class="location-value">-</p>
-                        </div>
+            <div class="side-column">
+                <!-- My Vehicle Card -->
+                <div class="vehicle-card">
+                    <div class="vehicle-header">
+                        <h3>My Vehicle</h3>
+                        <span class="vehicle-plate">XXX-XXX</span>
                     </div>
                     
-                    <div class="divider"></div>
-                    
-                    <div class="vehicle-details">
-                        <div class="detail-row">
-                            <span class="detail-label">Duration</span>
-                            <span class="detail-value">-</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Current Fee</span>
-                            <span class="detail-value fee">-</span>
-                        </div>
-                    </div>
-                    
-                    <div class="highlight-section">
-                        <label class="highlight-toggle">
-                            <span class="toggle-label">
-                                <i class="fas fa-map-marker-alt"></i>
-                                Highlight on Map
-                            </span>
-                            <div class="toggle-switch">
-                                <input type="checkbox" id="highlightToggle" checked>
-                                <span class="toggle-slider"></span>
+                    <div class="vehicle-content">
+                        <div class="vehicle-location">
+                            <div class="location-icon">
+                                <i class="fas fa-parking"></i>
                             </div>
-                        </label>
+                            <div class="location-info">
+                                <p class="location-label">Current Location</p>
+                                <p class="location-value">-</p>
+                            </div>
+                        </div>
+                        
+                        <div class="divider"></div>
+                        
+                        <div class="vehicle-details">
+                            <div class="detail-row">
+                                <span class="detail-label">Duration</span>
+                                <span class="detail-value">-</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Current Fee</span>
+                                <span class="detail-value fee">-</span>
+                            </div>
+                        </div>
+                        
+                        <div class="highlight-section">
+                            <label class="highlight-toggle">
+                                <span class="toggle-label">
+                                    <i class="fas fa-map-marker-alt"></i>
+                                    Highlight on Map
+                                </span>
+                                <div class="toggle-switch">
+                                    <input type="checkbox" id="highlightToggle" checked>
+                                    <span class="toggle-slider"></span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Parking Stats Panel -->
+                <div class="parking-stats-panel">
+                    <div class="parking-stats-header">Parking Space Feed</div>
+                    <div class="parking-stats-grid">
+                        <div class="stat-card total">
+                            <p class="stat-label">Total Capacity</p>
+                            <p class="stat-value">--</p>
+                        </div>
+                        <div class="stat-card available">
+                            <p class="stat-label">Available</p>
+                            <p class="stat-value">--</p>
+                        </div>
+                        <div class="stat-card occupied">
+                            <p class="stat-label">Occupied</p>
+                            <p class="stat-value">--</p>
+                        </div>
                     </div>
                 </div>
             </div>

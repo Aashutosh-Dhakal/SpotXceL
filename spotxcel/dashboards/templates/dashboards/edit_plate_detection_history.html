@@ -1,0 +1,64 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block title %}Edit Plate Detection - SpotXceL{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'dashboards/edit_user.css' %}">
+{% endblock %}
+
+{% block content %}
+    <div class="container">
+        {% if messages %}
+            {% for message in messages %}
+            <div class="alert-card {% if message.tags %}alert-{{ message.tags }}{% else %}alert-info{% endif %}">
+                {% if message.tags == 'success' %}
+                    <i class="fas fa-check-circle alert-icon"></i>
+                {% elif message.tags == 'warning' %}
+                    <i class="fas fa-exclamation-triangle alert-icon"></i>
+                {% elif message.tags == 'error' %}
+                    <i class="fas fa-exclamation-circle alert-icon"></i>
+                {% else %}
+                    <i class="fas fa-info-circle alert-icon"></i>
+                {% endif %}
+                <div class="alert-content">
+                    <p class="alert-message">{{ message }}</p>
+                </div>
+            </div>
+            {% endfor %}
+        {% endif %}
+
+        <div class="edit-form-card">
+            <div class="card-header">
+                <h2>Edit Plate Detection Record</h2>
+                <p>Update only plate text and plate type</p>
+            </div>
+
+            <form method="POST">
+                {% csrf_token %}
+                <div class="card-body">
+                    <div class="form-group">
+                        <label>Timestamp</label>
+                        <input type="text" value="{{ record.timestamp|date:'Y-m-d H:i:s' }}" disabled>
+                    </div>
+                    <div class="form-group">
+                        <label for="license_plate_text">License Plate Text</label>
+                        <input type="text" id="license_plate_text" name="license_plate_text" value="{{ record.license_plate_text }}" maxlength="64" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="plate_type">Plate Type</label>
+                        <select id="plate_type" name="plate_type" required>
+                            {% for option in plate_type_options %}
+                                <option value="{{ option }}" {% if record.plate_type == option %}selected{% endif %}>{{ option }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <a href="{% url 'plate_detection_history' %}" class="btn-back"><i class="fas fa-arrow-left"></i> Go Back</a>
+                    <button type="submit" class="btn-save">Update Record</button>
+                </div>
+            </form>
+        </div>
+    </div>
+{% endblock %}
