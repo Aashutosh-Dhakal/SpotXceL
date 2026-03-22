@@ -12,15 +12,26 @@
         const occupiedEl = document.getElementById('homeOccupiedSpots');
         const availableEl = document.getElementById('homeAvailableSpots');
 
+        const formatStat = (value) => {
+            if (value === '--') {
+                return '--';
+            }
+            return String(Math.max(0, Number(value) || 0));
+        };
+
         if (totalEl) {
-            totalEl.textContent = String(Math.max(0, Number(total) || 0));
+            totalEl.textContent = formatStat(total);
         }
         if (occupiedEl) {
-            occupiedEl.textContent = String(Math.max(0, Number(occupied) || 0));
+            occupiedEl.textContent = formatStat(occupied);
         }
         if (availableEl) {
-            availableEl.textContent = String(Math.max(0, Number(available) || 0));
+            availableEl.textContent = formatStat(available);
         }
+    }
+
+    function setHomeStatsInactive() {
+        updateHomeStats('--', '--', '--');
     }
 
     function updateLastUpdated() {
@@ -42,6 +53,12 @@
             }
 
             const payload = await response.json();
+            if (!payload || payload.active !== true) {
+                setHomeStatsInactive();
+                updateLastUpdated();
+                return;
+            }
+
             const stats = payload && payload.stats ? payload.stats : {};
             updateHomeStats(stats.total || 0, stats.occupied || 0, stats.available || 0);
             updateLastUpdated();

@@ -42,6 +42,9 @@
     let parkingSpaces = [];
     let parkingOverlayActive = false;
     let parkingLastFrameBitmap = null;
+    let parkingEditorPendingStart = false;
+    let pendingParkingSourcePayload = null;
+    let pendingParkingSourceFile = null;
 
     function getCSRFToken() {
         const cookieValue = document.cookie
@@ -108,34 +111,79 @@
     }
 
     function setParkingStats(total, occupied, available) {
+        const totalCount = Number.isFinite(Number(total)) ? Number(total) : 0;
+        const occupiedCount = Number.isFinite(Number(occupied)) ? Number(occupied) : 0;
+        const availableCount = Number.isFinite(Number(available)) ? Number(available) : Math.max(0, totalCount - occupiedCount);
+
         const statValues = document.querySelectorAll('.stats-section .stat-value');
         if (statValues[0]) {
-            statValues[0].textContent = String(total);
+            statValues[0].textContent = String(availableCount);
         }
         if (statValues[1]) {
-            statValues[1].textContent = String(occupied);
+            statValues[1].textContent = String(occupiedCount);
         }
 
         const occupancyBar = document.getElementById('occupancyBar');
         if (occupancyBar) {
-            const percentage = total > 0 ? Math.round((occupied / total) * 100) : 0;
+            const percentage = totalCount > 0 ? Math.round((occupiedCount / totalCount) * 100) : 0;
             occupancyBar.style.width = `${percentage}%`;
+        }
+
+        const availableBar = document.getElementById('availableBar');
+        if (availableBar) {
+            const percentage = totalCount > 0 ? Math.round((availableCount / totalCount) * 100) : 0;
+            availableBar.style.width = `${percentage}%`;
         }
 
         const occupancyText = document.querySelector('.occupancy-text');
         if (occupancyText) {
-            const percentage = total > 0 ? Math.round((occupied / total) * 100) : 0;
+            const percentage = totalCount > 0 ? Math.round((occupiedCount / totalCount) * 100) : 0;
             occupancyText.textContent = `${percentage}% Occupancy`;
         }
 
-        const availableText = document.querySelector('.revenue-change span');
-        if (availableText) {
-            availableText.textContent = `Available: ${available}`;
+        const revenueHintText = document.querySelector('.revenue-change span');
+        if (revenueHintText) {
+            revenueHintText.textContent = 'Income';
         }
 
         const capacityNoteValue = document.getElementById('capacityNoteValue');
         if (capacityNoteValue) {
-            capacityNoteValue.textContent = total > 0 ? `${total} spaces configured` : 'Configured spaces';
+            capacityNoteValue.textContent = totalCount > 0 ? `${totalCount} spaces configured` : 'Configured spaces';
+        }
+    }
+
+    function setParkingStatsInactive() {
+        const statValues = document.querySelectorAll('.stats-section .stat-value');
+        if (statValues[0]) {
+            statValues[0].textContent = '--';
+        }
+        if (statValues[1]) {
+            statValues[1].textContent = '--';
+        }
+
+        const occupancyBar = document.getElementById('occupancyBar');
+        if (occupancyBar) {
+            occupancyBar.style.width = '0%';
+        }
+
+        const availableBar = document.getElementById('availableBar');
+        if (availableBar) {
+            availableBar.style.width = '0%';
+        }
+
+        const occupancyText = document.querySelector('.occupancy-text');
+        if (occupancyText) {
+            occupancyText.textContent = '--';
+        }
+
+        const revenueHintText = document.querySelector('.revenue-change span');
+        if (revenueHintText) {
+            revenueHintText.textContent = 'Income';
+        }
+
+        const capacityNoteValue = document.getElementById('capacityNoteValue');
+        if (capacityNoteValue) {
+            capacityNoteValue.textContent = 'Configured spaces';
         }
     }
 
@@ -425,6 +473,9 @@
                 if (!payload.active) {
                     setFeedUiActive(feedType, false);
                     stopFeedPolling(feedType);
+                    if (feedType === 'parking') {
+                        setParkingStatsInactive();
+                    }
                 } else {
                     scheduleNextFrame(feedType, FEED_LOOP_DELAY_MS);
                 }
@@ -543,9 +594,11 @@
         return response.json();
     }
 
-    async function requestFeedFrameBlob(feedType) {
+    async function requestFeedFrameBlob(feedType, options = {}) {
+        const useRawFrame = feedType === 'parking' && options.raw === true;
         const endpoint = feedType === 'entry' ? API.entryFrame : API.parkingFrame;
-        const response = await fetch(`${endpoint}?t=${Date.now()}`, {
+        const querySuffix = useRawFrame ? '&raw=1' : '';
+        const response = await fetch(`${endpoint}?t=${Date.now()}${querySuffix}`, {
             method: 'GET',
             credentials: 'same-origin',
             cache: 'no-store',
@@ -570,7 +623,7 @@
     async function fetchFirstParkingFrameForEditor(maxTries = 20) {
         for (let i = 0; i < maxTries; i += 1) {
             try {
-                const blob = await requestFeedFrameBlob('parking');
+                const blob = await requestFeedFrameBlob('parking', { raw: true });
                 if (blob) {
                     const bitmap = await createImageBitmap(blob);
                     return {
@@ -605,15 +658,27 @@
             return;
         }
 
+        // Pause parking source while user is drawing spaces, so playback does not advance in the background.
+        try {
+            await requestRemoveSource('parking');
+            stopFeedPolling('parking');
+            setFeedUiActive('parking', false);
+            setParkingStatsInactive();
+        } catch (error) {
+            console.error('Failed to pause parking source before editor:', error);
+        }
+
         if (parkingEditorInstance) {
             parkingEditorInstance.destroy();
             parkingEditorInstance = null;
         }
 
+        parkingEditorPendingStart = true;
+
         openParkingEditorModal();
 
         parkingEditorInstance = window.initParkingEditor(firstFrame, host, {
-            onStartDetection: (spaces) => {
+            onStartDetection: async (spaces) => {
                 parkingSpaces = Array.isArray(spaces) ? spaces : [];
                 setParkingStats(parkingSpaces.length, 0, parkingSpaces.length);
                 saveParkingLayoutToServer(parkingSpaces);
@@ -624,11 +689,54 @@
                 closeParkingEditorModal();
                 // Use API-rendered processed frame only to avoid client canvas rescaling artifacts.
                 parkingOverlayActive = false;
-                setParkingRenderSurface('image');
-                refreshParkingStatsFromMetadata(true);
-                startFeedPolling('parking');
+
+                try {
+                    if (!pendingParkingSourcePayload) {
+                        throw new Error('No pending parking source found. Please select source again.');
+                    }
+
+                    await requestStartSource('parking', pendingParkingSourcePayload, pendingParkingSourceFile);
+                    parkingEditorPendingStart = false;
+                    pendingParkingSourcePayload = null;
+                    pendingParkingSourceFile = null;
+
+                    setFeedUiActive('parking', true);
+                    setParkingRenderSurface('image');
+                    refreshParkingStatsFromMetadata(true);
+                    startFeedPolling('parking');
+                } catch (error) {
+                    console.error('Failed to start parking detection after editor:', error);
+                    alert(error.message || 'Failed to start parking detection source');
+                    parkingEditorPendingStart = false;
+                    pendingParkingSourcePayload = null;
+                    pendingParkingSourceFile = null;
+                    setFeedUiActive('parking', false);
+                    setParkingStatsInactive();
+                }
             },
         });
+    }
+
+    async function dismissParkingEditor() {
+        if (parkingEditorInstance) {
+            parkingEditorInstance.destroy();
+            parkingEditorInstance = null;
+        }
+
+        closeParkingEditorModal();
+        parkingOverlayActive = false;
+
+        if (parkingEditorPendingStart) {
+            parkingEditorPendingStart = false;
+            pendingParkingSourcePayload = null;
+            pendingParkingSourceFile = null;
+            stopFeedPolling('parking');
+            setFeedUiActive('parking', false);
+            setParkingStatsInactive();
+            return;
+        }
+
+        startFeedPolling('parking');
     }
 
     async function syncInitialFeedStatus() {
@@ -644,10 +752,16 @@
                     startFeedPolling(feedType);
                 } else {
                     setFeedUiActive(feedType, false);
+                    if (feedType === 'parking') {
+                        setParkingStatsInactive();
+                    }
                 }
             } catch (error) {
                 console.error(`Failed to sync ${feedType} status:`, error);
                 setFeedUiActive(feedType, false);
+                if (feedType === 'parking') {
+                    setParkingStatsInactive();
+                }
             }
         }
     }
@@ -751,6 +865,12 @@
         setFeedUiActive(currentFeedType, true);
 
         if (currentFeedType === 'parking') {
+            pendingParkingSourcePayload = {
+                source_type: startPayload.source_type,
+                camera_index: startPayload.camera_index,
+                source_label: startPayload.source_label,
+            };
+            pendingParkingSourceFile = fileObj || null;
             stopFeedPolling('parking');
             await openParkingEditorThenStartPolling();
         } else {
@@ -826,12 +946,15 @@
             setFeedUiActive(pendingRemovalFeedType, false);
             if (pendingRemovalFeedType === 'parking') {
                 parkingOverlayActive = false;
+                parkingEditorPendingStart = false;
+                pendingParkingSourcePayload = null;
+                pendingParkingSourceFile = null;
                 if (parkingEditorInstance) {
                     parkingEditorInstance.destroy();
                     parkingEditorInstance = null;
                 }
                 closeParkingEditorModal();
-                setParkingStats(0, 0, 0);
+                setParkingStatsInactive();
             }
         } catch (error) {
             console.error('Remove source failed:', error);
@@ -854,13 +977,7 @@
 
         const editorModal = getParkingEditorModalElement();
         if (event.target === editorModal) {
-            if (parkingEditorInstance) {
-                parkingEditorInstance.destroy();
-                parkingEditorInstance = null;
-            }
-            closeParkingEditorModal();
-            parkingOverlayActive = false;
-            startFeedPolling('parking');
+            void dismissParkingEditor();
         }
     };
 
@@ -870,13 +987,7 @@
         const closeBtn = document.getElementById('parkingEditorModalCloseBtn');
         if (closeBtn) {
             closeBtn.addEventListener('click', function () {
-                if (parkingEditorInstance) {
-                    parkingEditorInstance.destroy();
-                    parkingEditorInstance = null;
-                }
-                closeParkingEditorModal();
-                parkingOverlayActive = false;
-                startFeedPolling('parking');
+                void dismissParkingEditor();
             });
         }
     });

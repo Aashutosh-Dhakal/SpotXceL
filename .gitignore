@@ -15,4 +15,4 @@ media/
 # OS files
 .DS_Store
 
-plate_detections.csv
+spotxcel/temp_stream_uploads/*

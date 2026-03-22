@@ -347,6 +347,7 @@ class _ServerFeedRuntime:
         self.source_type = None
         self.source_label = None
         self.source_ref = None
+        self.latest_raw_jpeg = None
         self.latest_jpeg = None
         self.latest_meta = None
         self.updated_at = 0.0
@@ -374,6 +375,7 @@ class _ServerFeedRuntime:
             self.source_type = source_type
             self.source_label = source_label
             self.source_ref = source_ref
+            self.latest_raw_jpeg = None
             self.latest_jpeg = None
             self.latest_meta = None
             self.updated_at = time.time()
@@ -400,6 +402,7 @@ class _ServerFeedRuntime:
             self.thread = None
             self.error = None
             if clear_latest:
+                self.latest_raw_jpeg = None
                 self.latest_jpeg = None
                 self.latest_meta = None
                 self.updated_at = time.time()
@@ -431,6 +434,7 @@ class _ServerFeedRuntime:
                 'source_type': self.source_type,
                 'source_label': self.source_label,
                 'updated_at': self.updated_at,
+                'latest_raw_jpeg': self.latest_raw_jpeg,
                 'latest_jpeg': self.latest_jpeg,
                 'latest_meta': self.latest_meta,
                 'error': self.error,
@@ -465,6 +469,15 @@ class _ServerFeedRuntime:
                     interpolation=cv2.INTER_AREA,
                 )
 
+            raw_jpeg = None
+            ok_raw_encode, raw_encoded = cv2.imencode(
+                '.jpg',
+                frame,
+                [int(cv2.IMWRITE_JPEG_QUALITY), SERVER_RUNTIME_JPEG_QUALITY],
+            )
+            if ok_raw_encode:
+                raw_jpeg = raw_encoded.tobytes()
+
             try:
                 processed = self.frame_processor(frame)
                 meta = None
@@ -485,6 +498,7 @@ class _ServerFeedRuntime:
                 if not ok_encode:
                     continue
                 with self.lock:
+                    self.latest_raw_jpeg = raw_jpeg
                     self.latest_jpeg = encoded.tobytes()
                     self.latest_meta = meta
                     self.updated_at = time.time()
@@ -929,10 +943,14 @@ def _server_feed_live_frame(runtime, request, include_source_headers=False):
     snap = runtime.snapshot()
     if not snap['active']:
         return JsonResponse({'active': False, 'waiting_frame': False})
-    if not snap['latest_jpeg']:
+
+    raw_requested = str(request.GET.get('raw', '')).strip().lower() in {'1', 'true', 'yes'}
+    frame_bytes = snap.get('latest_raw_jpeg') if raw_requested else snap.get('latest_jpeg')
+
+    if not frame_bytes:
         return JsonResponse({'active': True, 'waiting_frame': True})
 
-    response = HttpResponse(snap['latest_jpeg'], content_type='image/jpeg')
+    response = HttpResponse(frame_bytes, content_type='image/jpeg')
     response['Cache-Control'] = 'no-store'
     if include_source_headers:
         response['X-Parking-Source-Type'] = snap['source_type'] or ''

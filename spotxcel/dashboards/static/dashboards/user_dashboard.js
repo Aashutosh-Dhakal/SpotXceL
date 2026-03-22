@@ -21,14 +21,21 @@
         const availableEl = document.querySelector('.parking-stats-grid .stat-card.available .stat-value');
         const occupiedEl = document.querySelector('.parking-stats-grid .stat-card.occupied .stat-value');
 
+        const formatStat = (value) => {
+            if (value === '--') {
+                return '--';
+            }
+            return String(Number.isFinite(Number(value)) ? Math.max(0, Math.round(Number(value))) : 0);
+        };
+
         if (totalEl) {
-            totalEl.textContent = String(Number.isFinite(total) ? Math.max(0, Math.round(total)) : 0);
+            totalEl.textContent = formatStat(total);
         }
         if (availableEl) {
-            availableEl.textContent = String(Number.isFinite(available) ? Math.max(0, Math.round(available)) : 0);
+            availableEl.textContent = formatStat(available);
         }
         if (occupiedEl) {
-            occupiedEl.textContent = String(Number.isFinite(occupied) ? Math.max(0, Math.round(occupied)) : 0);
+            occupiedEl.textContent = formatStat(occupied);
         }
     }
 
@@ -66,7 +73,7 @@
         }
 
         setLiveBadgeActive(false);
-        updateParkingStats(0, 0, 0);
+        updateParkingStats('--', '--', '--');
     }
 
     function showFrame(blob) {
