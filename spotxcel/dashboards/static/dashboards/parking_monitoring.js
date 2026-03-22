@@ -25,6 +25,7 @@
     };
 
     const FEED_LOOP_DELAY_MS = 30;
+    const PARKING_META_REFRESH_MS = 400;
 
     let currentFeedType = null;
     let pendingRemovalFeedType = null;
@@ -35,6 +36,7 @@
     let parkingPollingActive = false;
     let entryFrameInFlight = false;
     let parkingFrameInFlight = false;
+    let parkingMetaLastFetchAt = 0;
 
     let parkingEditorInstance = null;
     let parkingSpaces = [];
@@ -50,6 +52,35 @@
 
     function getProcessedImageElement(feedType) {
         return document.getElementById(feedType === 'entry' ? 'entry-processed-feed' : 'parking-processed-feed');
+    }
+
+    function getParkingOutputCanvasElement() {
+        return document.getElementById('parking-output-canvas');
+    }
+
+    function setParkingRenderSurface(mode) {
+        const processedImage = getProcessedImageElement('parking');
+        const outputCanvas = getParkingOutputCanvasElement();
+
+        if (processedImage) {
+            if (mode === 'image') {
+                processedImage.style.display = 'block';
+                processedImage.classList.remove('hidden');
+            } else {
+                processedImage.style.display = 'none';
+                processedImage.classList.add('hidden');
+            }
+        }
+
+        if (outputCanvas) {
+            if (mode === 'overlay') {
+                outputCanvas.style.display = 'block';
+                outputCanvas.classList.add('active');
+            } else {
+                outputCanvas.style.display = 'none';
+                outputCanvas.classList.remove('active');
+            }
+        }
     }
 
     function getParkingEditorModalElement() {
@@ -114,12 +145,16 @@
         const selectBtn = document.getElementById(`${feedType}-select-btn`);
         const processedImage = getProcessedImageElement(feedType);
         const videoEl = document.getElementById(`${feedType}-video`);
-        const outputCanvas = feedType === 'parking' ? document.getElementById('parking-output-canvas') : null;
+        const outputCanvas = feedType === 'parking' ? getParkingOutputCanvasElement() : null;
 
         if (active) {
             if (processedImage) {
-                processedImage.style.display = 'block';
-                processedImage.classList.remove('hidden');
+                if (feedType === 'parking') {
+                    setParkingRenderSurface('image');
+                } else {
+                    processedImage.style.display = 'block';
+                    processedImage.classList.remove('hidden');
+                }
             }
             if (noFeedMessage) {
                 noFeedMessage.style.display = 'none';
@@ -132,7 +167,12 @@
             }
         } else {
             if (processedImage) {
-                processedImage.style.display = 'none';
+                if (feedType === 'parking') {
+                    setParkingRenderSurface('none');
+                } else {
+                    processedImage.style.display = 'none';
+                    processedImage.classList.add('hidden');
+                }
                 processedImage.removeAttribute('src');
                 const prevUrl = processedImage.getAttribute('data-last-object-url');
                 if (prevUrl) {
@@ -157,7 +197,7 @@
             videoEl.src = '';
         }
 
-        if (outputCanvas) {
+        if (outputCanvas && feedType !== 'parking') {
             outputCanvas.style.display = 'none';
             outputCanvas.classList.remove('active');
             const ctx = outputCanvas.getContext('2d');
@@ -185,6 +225,32 @@
             return null;
         }
         return response.json();
+    }
+
+    async function refreshParkingStatsFromMetadata(force = false) {
+        const now = Date.now();
+        if (!force && now - parkingMetaLastFetchAt < PARKING_META_REFRESH_MS) {
+            return;
+        }
+        parkingMetaLastFetchAt = now;
+
+        try {
+            const metadata = await requestParkingLiveMetadata();
+            if (!metadata || metadata.active === false) {
+                return;
+            }
+
+            const stats = metadata.occupancy_stats || {};
+            const total = Number(stats.total);
+            const occupied = Number(stats.occupied);
+            const available = Number(stats.available);
+
+            if (Number.isFinite(total) && Number.isFinite(occupied) && Number.isFinite(available)) {
+                setParkingStats(total, occupied, available);
+            }
+        } catch (error) {
+            console.error('Failed to refresh parking stats metadata:', error);
+        }
     }
 
     async function requestParkingLayout() {
@@ -217,8 +283,7 @@
     }
 
     async function renderParkingOverlayFromFrameBlob(blob) {
-        const outputCanvas = document.getElementById('parking-output-canvas');
-        const processedImage = getProcessedImageElement('parking');
+        const outputCanvas = getParkingOutputCanvasElement();
         const parkingFeed = document.getElementById('parking-feed');
         if (!outputCanvas || !window.renderDetectionOverlay || !window.checkOccupancy) {
             return false;
@@ -244,11 +309,7 @@
 
         outputCanvas.width = renderWidth;
         outputCanvas.height = renderHeight;
-        outputCanvas.style.display = 'block';
-        outputCanvas.classList.add('active');
-        if (processedImage) {
-            processedImage.style.display = 'none';
-        }
+        setParkingRenderSurface('overlay');
 
         const detections = Array.isArray(metadata.detections) ? metadata.detections : [];
         const scaledBoxes = detections.map((d) => ({
@@ -389,17 +450,26 @@
                     scheduleNextFrame(feedType, FEED_LOOP_DELAY_MS);
                     return;
                 }
+                setParkingRenderSurface('image');
             }
 
             const objectUrl = URL.createObjectURL(blob);
             const prevUrl = processedImage.getAttribute('data-last-object-url');
             processedImage.src = objectUrl;
-            processedImage.style.display = 'block';
-            processedImage.classList.remove('hidden');
+            if (feedType === 'parking') {
+                setParkingRenderSurface('image');
+            } else {
+                processedImage.style.display = 'block';
+                processedImage.classList.remove('hidden');
+            }
             processedImage.setAttribute('data-last-object-url', objectUrl);
 
             if (prevUrl) {
                 URL.revokeObjectURL(prevUrl);
+            }
+
+            if (feedType === 'parking') {
+                refreshParkingStatsFromMetadata();
             }
 
             scheduleNextFrame(feedType, FEED_LOOP_DELAY_MS);
@@ -552,7 +622,10 @@
                     parkingEditorInstance = null;
                 }
                 closeParkingEditorModal();
-                parkingOverlayActive = true;
+                // Use API-rendered processed frame only to avoid client canvas rescaling artifacts.
+                parkingOverlayActive = false;
+                setParkingRenderSurface('image');
+                refreshParkingStatsFromMetadata(true);
                 startFeedPolling('parking');
             },
         });
