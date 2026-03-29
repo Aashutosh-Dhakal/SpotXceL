@@ -53,6 +53,7 @@
                 <div class="camera-feed">
                     <video id="user-parking-video" autoplay playsinline muted style="display: none;"></video>
                     <img id="user-parking-feed" alt="Parking Space Feed" style="display: none;">
+                    <canvas id="user-slot-highlight-canvas" class="user-slot-highlight-canvas"></canvas>
                     <div class="user-no-feed-message" id="user-parking-no-feed">
                         <i class="fas fa-video-slash"></i>
                         <p>Waiting for admin to select Vehicle Detection Feed source</p>
@@ -64,18 +65,28 @@
                 <!-- My Vehicle Card -->
                 <div class="vehicle-card">
                     <div class="vehicle-header">
-                        <h3>My Vehicle</h3>
-                        <span class="vehicle-plate">XXX-XXX</span>
+                        <h3>Slot Tracker</h3>
+                        <span class="vehicle-plate" id="tracked-slot-chip">-</span>
                     </div>
                     
                     <div class="vehicle-content">
+                        <div class="slot-selector-wrap">
+                            <label for="trackedSlotSelect" class="slot-selector-label">Select Slot</label>
+                            <select id="trackedSlotSelect" class="slot-selector-input">
+                                <option value="">Choose a slot</option>
+                                {% for slot_id in slot_ids %}
+                                    <option value="{{ slot_id }}">{{ slot_id }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
                         <div class="vehicle-location">
                             <div class="location-icon">
                                 <i class="fas fa-parking"></i>
                             </div>
                             <div class="location-info">
-                                <p class="location-label">Current Location</p>
-                                <p class="location-value">-</p>
+                                <p class="location-label">Tracking Status</p>
+                                <p class="location-value" id="tracked-slot-status">-</p>
                             </div>
                         </div>
                         
@@ -83,12 +94,20 @@
                         
                         <div class="vehicle-details">
                             <div class="detail-row">
-                                <span class="detail-label">Duration</span>
-                                <span class="detail-value">-</span>
+                                <span class="detail-label">Start Time</span>
+                                <span class="detail-value" id="tracked-start-time">-</span>
                             </div>
                             <div class="detail-row">
-                                <span class="detail-label">Current Fee</span>
-                                <span class="detail-value fee">-</span>
+                                <span class="detail-label">Duration</span>
+                                <span class="detail-value" id="tracked-duration">-</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">End Time</span>
+                                <span class="detail-value" id="tracked-end-time">-</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Session ID</span>
+                                <span class="detail-value" id="tracked-session-id">-</span>
                             </div>
                         </div>
                         

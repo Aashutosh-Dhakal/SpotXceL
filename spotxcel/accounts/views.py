@@ -171,6 +171,160 @@ def login(request):
     
     return render(request, 'accounts/login.html')
 
+
+def forgot_password(request):
+    """Render forgot-password page and send reset email."""
+    if request.method == 'POST':
+        email_input = request.POST.get('email', '').strip().lower()
+
+        if not email_input:
+            messages.error(request, 'Email is required.')
+            return render(request, 'accounts/forgot_password.html', {'email': email_input})
+
+        if '@' not in email_input or '.' not in email_input:
+            messages.error(request, 'Please enter a valid email address.')
+            return render(request, 'accounts/forgot_password.html', {'email': email_input})
+
+        try:
+            user = User.objects.get(email=email_input)
+
+            # Generate token and encoded user ID (same pipeline as account verification)
+            token = default_token_generator.make_token(user)
+            uid = urlsafe_base64_encode(force_bytes(user.user_id))
+
+            # Build absolute reset URL
+            reset_path = f'/accounts/reset-password/{uid}/{token}/'
+            reset_url = request.build_absolute_uri(reset_path)
+
+            # Send email
+            subject = 'SpotXceL - Reset your password'
+            text_message = (
+                f'Hi {user.username},\n\n'
+                f'We received a request to reset your SpotXceL password.\n'
+                f'Please click the link below to set a new password:\n\n'
+                f'{reset_url}\n\n'
+                f'This link will expire automatically for security reasons.\n'
+                f'If you did not request a password reset, you can ignore this email.\n\n'
+                f'- SpotXceL'
+            )
+            html_message = f'''
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            </head>
+            <body style="margin:0;padding:0;background-color:#F3F4F6;font-family:'Inter',Arial,sans-serif;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#F3F4F6;padding:40px 20px;">
+                    <tr>
+                        <td align="center">
+                            <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+                                <tr>
+                                    <td style="background:linear-gradient(135deg,#1F2937 0%,#374151 100%);padding:32px 40px;text-align:center;">
+                                        <h1 style="margin:0;font-size:24px;font-weight:800;color:#ffffff;letter-spacing:0.03em;"><span style="color:#ffffff;">Spot</span><span style="color:#EA580C;">XceL</span></h1>
+                                        <p style="margin:8px 0 0;font-size:13px;color:#9CA3AF;">Smart Parking System</p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:40px 40px 20px;">
+                                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+                                            <tr>
+                                                <td align="center">
+                                                    <table role="presentation" cellpadding="0" cellspacing="0">
+                                                        <tr>
+                                                            <td align="center" style="width:64px;height:64px;border-radius:50%;background:#FFF7ED;text-align:center;vertical-align:middle;">
+                                                                <span style="font-size:28px;line-height:64px;">&#128274;</span>
+                                                            </td>
+                                                        </tr>
+                                                    </table>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                        <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111827;text-align:center;">Reset Your Password</h2>
+                                        <p style="margin:0 0 28px;font-size:14px;color:#6B7280;line-height:1.6;text-align:center;">Hi <strong style="color:#111827;">{user.username}</strong>, click the button below to choose a new password for your account.</p>
+                                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                                            <tr>
+                                                <td align="center">
+                                                    <a href="{reset_url}" style="display:inline-block;padding:14px 40px;background-color:#F26522;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;border-radius:8px;box-shadow:0 2px 8px rgba(242,101,34,0.3);">Reset Password</a>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:0 40px 32px;">
+                                        <div style="margin-top:24px;padding:16px;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:8px;">
+                                            <p style="margin:0 0 8px;font-size:12px;color:#9CA3AF;text-align:center;">Button not working? Copy and paste this link:</p>
+                                            <p style="margin:0;font-size:12px;color:#F26522;word-break:break-all;text-align:center;">{reset_url}</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:20px 40px;border-top:1px solid #E5E7EB;text-align:center;">
+                                        <p style="margin:0 0 4px;font-size:12px;color:#9CA3AF;">This link will expire automatically for security.</p>
+                                        <p style="margin:0;font-size:12px;color:#9CA3AF;">If you did not request this, ignore this email.</p>
+                                        <p style="margin:16px 0 0;font-size:11px;color:#D1D5DB;">&copy; SpotXceL</p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+            </body>
+            </html>
+            '''
+
+            email = EmailMultiAlternatives(subject, text_message, settings.DEFAULT_FROM_EMAIL, [user.email])
+            email.attach_alternative(html_message, 'text/html')
+            email.send()
+        except User.DoesNotExist:
+            # Avoid leaking whether the email is registered.
+            pass
+        except Exception:
+            # Keep response generic to avoid user enumeration side-channel.
+            pass
+
+        messages.success(request, 'If an account with that email exists, a password reset link has been sent.')
+        return redirect('forgot_password')
+
+    return render(request, 'accounts/forgot_password.html')
+
+
+def reset_password(request, uidb64, token):
+    """Handle password reset from emailed token link."""
+    try:
+        uid = force_str(urlsafe_base64_decode(uidb64))
+        user = User.objects.get(user_id=uid)
+    except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+        user = None
+
+    if user is None or not default_token_generator.check_token(user, token):
+        return render(request, 'accounts/reset_password_invalid.html')
+
+    if request.method == 'POST':
+        password = request.POST.get('password', '')
+        confirm_password = request.POST.get('confirm_password', '')
+
+        if not password or not confirm_password:
+            messages.error(request, 'Both password fields are required.')
+            return render(request, 'accounts/reset_password.html')
+
+        if len(password) < 8:
+            messages.error(request, 'Password must be at least 8 characters long.')
+            return render(request, 'accounts/reset_password.html')
+
+        if password != confirm_password:
+            messages.error(request, 'Passwords do not match.')
+            return render(request, 'accounts/reset_password.html')
+
+        user.password = hashlib.sha256(password.encode()).hexdigest()
+        user.save()
+
+        messages.success(request, 'Your password has been reset successfully. Please log in.')
+        return redirect('login')
+
+    return render(request, 'accounts/reset_password.html')
+
 def logout(request):
     # Clear any existing messages to prevent them from showing on login page
     storage = messages.get_messages(request)

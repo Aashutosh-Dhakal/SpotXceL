@@ -115,6 +115,15 @@
     opacity: 0.9;
 }
 
+.user-slot-highlight-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    display: none;
+}
+
 .user-no-feed-message {
     position: absolute;
     inset: 0;
@@ -241,6 +250,35 @@
     display: flex;
     flex-direction: column;
     gap: 14px;
+}
+
+.slot-selector-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.slot-selector-label {
+    font-size: 0.75rem;
+    color: #6B7280;
+    font-weight: 600;
+}
+
+.slot-selector-input {
+    width: 100%;
+    padding: 9px 12px;
+    border: 1px solid #D1D5DB;
+    border-radius: 3px;
+    font-size: 0.8125rem;
+    color: #111827;
+    background: #fff;
+    font-family: inherit;
+}
+
+.slot-selector-input:focus {
+    outline: none;
+    border-color: #EA580C;
+    box-shadow: 0 0 0 2px rgba(234, 88, 12, 0.1);
 }
 
 .vehicle-location {

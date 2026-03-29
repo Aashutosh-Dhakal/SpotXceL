@@ -1,0 +1,59 @@
+.parking-fee-grid {
+    grid-template-columns: 1fr 1fr auto;
+}
+
+.fee-summary-chip {
+    background: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    border-radius: 4px;
+    color: #fff;
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+}
+
+.fee-summary-chip span {
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    opacity: 0.82;
+}
+
+.fee-summary-chip strong {
+    font-size: 1rem;
+}
+
+.filter-item select {
+    width: 100%;
+    padding: 9px 12px 9px 34px;
+    border: 1px solid #D1D5DB;
+    border-radius: 3px;
+    font-size: 0.8125rem;
+    color: #1F2937;
+    background: #fff;
+    font-family: inherit;
+}
+
+.filter-item select:focus {
+    outline: none;
+    border-color: #EA580C;
+    box-shadow: 0 0 0 2px rgba(234, 88, 12, 0.1);
+}
+
+.fee-hint {
+    margin: 14px 0 2px;
+    font-size: 0.8125rem;
+    color: #6B7280;
+}
+
+@media (max-width: 1024px) {
+    .parking-fee-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .fee-summary-chip {
+        align-items: flex-start;
+    }
+}

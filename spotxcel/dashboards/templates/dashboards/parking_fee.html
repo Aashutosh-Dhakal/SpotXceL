@@ -1,0 +1,159 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block title %}Parking Fee - SpotXceL{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'dashboards/parking_records.css' %}">
+    <link rel="stylesheet" href="{% static 'dashboards/parking_fee.css' %}">
+{% endblock %}
+
+{% block content %}
+    <div class="container">
+        {% if messages %}
+            {% for message in messages %}
+            <div class="alert-card {% if message.tags %}alert-{{ message.tags }}{% else %}alert-info{% endif %}">
+                {% if message.tags == 'success' %}
+                    <i class="fas fa-check-circle alert-icon"></i>
+                {% elif message.tags == 'warning' %}
+                    <i class="fas fa-exclamation-triangle alert-icon"></i>
+                {% elif message.tags == 'error' %}
+                    <i class="fas fa-exclamation-circle alert-icon"></i>
+                {% else %}
+                    <i class="fas fa-info-circle alert-icon"></i>
+                {% endif %}
+                <div class="alert-content">
+                    <p class="alert-message">{{ message }}</p>
+                </div>
+                <button class="alert-close" onclick="this.parentElement.style.display='none'"><i class="fas fa-times"></i></button>
+            </div>
+            {% endfor %}
+        {% endif %}
+
+        <div class="nav-tabs">
+            <a href="{% url 'parking_monitoring' %}" class="nav-tab">
+                <i class="fas fa-camera"></i>
+                <span>Parking Lot Monitoring</span>
+            </a>
+            <a href="{% url 'user_management' %}" class="nav-tab">
+                <i class="fas fa-users"></i>
+                <span>User Management System</span>
+            </a>
+            <a href="{% url 'parking_records' %}" class="nav-tab">
+                <i class="fas fa-clock"></i>
+                <span>Parking Records/History</span>
+            </a>
+            <a href="{% url 'parking_fee' %}" class="nav-tab active">
+                <i class="fas fa-coins"></i>
+                <span>Parking Fee</span>
+            </a>
+            <a href="{% url 'plate_detection_history' %}" class="nav-tab">
+                <i class="fas fa-id-card"></i>
+                <span>Plate Detection History</span>
+            </a>
+        </div>
+
+        <div class="page-header">
+            <div>
+                <h1>Parking Fee</h1>
+                <p>Set fee allocation per minute, hour, day, or month. Sessions are always charged at least 1 selected unit.</p>
+            </div>
+            <div class="fee-summary-chip">
+                <span>Recent Sessions Total</span>
+                <strong>Rs {{ total_recent_fee }}</strong>
+            </div>
+        </div>
+
+        <div class="filter-card">
+            <form method="POST" action="{% url 'parking_fee' %}">
+                {% csrf_token %}
+                <div class="filter-grid parking-fee-grid">
+                    <div class="filter-item">
+                        <label for="billing_unit">Fee Allocation Unit</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-hourglass-half"></i>
+                            <select id="billing_unit" name="billing_unit" required>
+                                {% for value, label in unit_choices %}
+                                    <option value="{{ value }}" {% if fee_config and fee_config.billing_unit == value %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="filter-item">
+                        <label for="rate">Rate (Rs per Unit)</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-rupee-sign"></i>
+                            <input id="rate" name="rate" type="number" min="0" step="0.01" required value="{% if fee_config %}{{ fee_config.rate }}{% else %}0.00{% endif %}">
+                        </div>
+                    </div>
+
+                    <div class="filter-actions">
+                        <button type="submit" class="btn-filter">
+                            <i class="fas fa-save"></i>
+                            Save Fee Settings
+                        </button>
+                    </div>
+                </div>
+            </form>
+
+            <p class="fee-hint">
+                Billing rule: if session duration is less than 1 selected unit, the system charges for exactly 1 unit.
+            </p>
+        </div>
+
+        <div class="table-card">
+            <div class="table-wrapper">
+                <table class="records-table">
+                    <thead>
+                        <tr>
+                            <th>Session ID</th>
+                            <th>Slot</th>
+                            <th>Status</th>
+                            <th>Entry Time</th>
+                            <th>Exit Time</th>
+                            <th>Duration</th>
+                            <th>Billable Units</th>
+                            <th>Fee (Rs)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if recent_sessions %}
+                            {% for item in recent_sessions %}
+                                <tr>
+                                    <td><span class="session-id">{{ item.record.session_id }}</span></td>
+                                    <td><span class="slot-badge">{{ item.record.slot_id }}</span></td>
+                                    <td>
+                                        <span class="status-badge {% if item.record.is_active %}status-occupied{% else %}status-completed{% endif %}">
+                                            {% if item.record.is_active %}In Progress{% else %}Completed{% endif %}
+                                        </span>
+                                    </td>
+                                    <td class="text-secondary">{{ item.record.entry_time|date:'Y-m-d H:i:s' }}</td>
+                                    <td class="text-secondary">
+                                        {% if item.record.exit_time %}
+                                            {{ item.record.exit_time|date:'Y-m-d H:i:s' }}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-secondary">{{ item.duration }}</td>
+                                    <td>{{ item.billable_units }}</td>
+                                    <td class="fee-amount">{{ item.fee }}</td>
+                                </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="8" class="empty-state-cell">No parking sessions found.</td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="pagination-section">
+                <div class="pagination-info">
+                    <p>Showing <span class="font-medium">{{ recent_sessions|length }}</span> recent session{{ recent_sessions|length|pluralize }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

@@ -6,6 +6,31 @@
     display: none;
 }
 
+/* Spinner button animation */
+@keyframes btn-spin {
+    to { transform: rotate(360deg); }
+}
+
+.btn-spinner-svg {
+    animation: btn-spin 0.8s linear infinite;
+    vertical-align: middle;
+}
+
+.send-spinner-hidden {
+    display: none;
+}
+
+.send-spinner-visible {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-loading {
+    opacity: 0.75;
+    cursor: not-allowed;
+}
+
 /* Auth Container */
 .auth-container {
     flex: 1;

@@ -4,10 +4,274 @@
 
     const USER_PARKING_LIVE_FRAME_ENDPOINT = '/dashboards/api/parking-source/live-frame/';
     const USER_PARKING_LIVE_METADATA_ENDPOINT = '/dashboards/api/parking-source/live-metadata/';
+    const USER_SLOT_STATUS_ENDPOINT = '/dashboards/api/parking-source/slot-status/';
+    const USER_PARKING_LAYOUT_ENDPOINT = '/dashboards/api/parking-source/layout/';
     const USER_PARKING_POLL_INTERVAL_MS = 300;
+    const USER_SLOT_POLL_INTERVAL_MS = 1000;
 
     let pollTimer = null;
+    let slotPollTimer = null;
     let lastObjectUrl = null;
+    let selectedSlotId = '';
+    let selectedSlotStatus = '';
+    let highlightEnabled = true;
+    let slotLayoutSpaces = [];
+
+    function setSlotTrackingPlaceholders(slotId) {
+        const slotChip = document.getElementById('tracked-slot-chip');
+        const statusEl = document.getElementById('tracked-slot-status');
+        const startEl = document.getElementById('tracked-start-time');
+        const endEl = document.getElementById('tracked-end-time');
+        const durationEl = document.getElementById('tracked-duration');
+        const sessionEl = document.getElementById('tracked-session-id');
+
+        if (slotChip) {
+            slotChip.textContent = slotId || '-';
+        }
+        if (statusEl) {
+            statusEl.textContent = slotId ? 'Loading...' : '-';
+        }
+        if (startEl) {
+            startEl.textContent = '-';
+        }
+        if (endEl) {
+            endEl.textContent = '-';
+        }
+        if (durationEl) {
+            durationEl.textContent = '-';
+        }
+        if (sessionEl) {
+            sessionEl.textContent = '-';
+        }
+
+        selectedSlotStatus = '';
+        renderSlotHighlightOverlay();
+    }
+
+    async function fetchParkingLayout() {
+        const response = await fetch(`${USER_PARKING_LAYOUT_ENDPOINT}?t=${Date.now()}`, {
+            method: 'GET',
+            credentials: 'same-origin',
+            cache: 'no-store',
+        });
+        if (!response.ok) {
+            return [];
+        }
+        const payload = await response.json().catch(() => ({}));
+        return Array.isArray(payload.spaces) ? payload.spaces : [];
+    }
+
+    async function refreshParkingLayout() {
+        try {
+            slotLayoutSpaces = await fetchParkingLayout();
+        } catch (error) {
+            console.error('Failed to fetch parking layout for highlight:', error);
+            slotLayoutSpaces = [];
+        }
+        renderSlotHighlightOverlay();
+    }
+
+    function getSelectedSlotSpace() {
+        if (!selectedSlotId || !Array.isArray(slotLayoutSpaces)) {
+            return null;
+        }
+
+        return slotLayoutSpaces.find((space) => {
+            const id = String((space && space.id) || '').trim();
+            return id === selectedSlotId;
+        }) || null;
+    }
+
+    function clearSlotHighlightOverlay() {
+        const canvas = document.getElementById('user-slot-highlight-canvas');
+        if (!canvas) {
+            return;
+        }
+
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+            ctx.clearRect(0, 0, canvas.width || 1, canvas.height || 1);
+        }
+
+        canvas.style.display = 'none';
+    }
+
+    function renderSlotHighlightOverlay() {
+        const shouldHighlight = highlightEnabled && selectedSlotId && selectedSlotStatus === 'In Progress';
+        if (!shouldHighlight) {
+            clearSlotHighlightOverlay();
+            return;
+        }
+
+        const selectedSpace = getSelectedSlotSpace();
+        const feedImage = document.getElementById('user-parking-feed');
+        const canvas = document.getElementById('user-slot-highlight-canvas');
+        if (!selectedSpace || !feedImage || !canvas) {
+            clearSlotHighlightOverlay();
+            return;
+        }
+
+        const points = Array.isArray(selectedSpace.points) ? selectedSpace.points : [];
+        if (points.length < 3) {
+            clearSlotHighlightOverlay();
+            return;
+        }
+
+        const width = Math.max(1, Math.round(feedImage.clientWidth || canvas.clientWidth || 0));
+        const height = Math.max(1, Math.round(feedImage.clientHeight || canvas.clientHeight || 0));
+        if (!width || !height) {
+            clearSlotHighlightOverlay();
+            return;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+            clearSlotHighlightOverlay();
+            return;
+        }
+
+        ctx.clearRect(0, 0, width, height);
+        ctx.beginPath();
+        points.forEach((pair, index) => {
+            const x = Number(pair[0]) * width;
+            const y = Number(pair[1]) * height;
+            if (index === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+        });
+        ctx.closePath();
+
+        ctx.fillStyle = 'rgba(234, 88, 12, 0.28)';
+        ctx.strokeStyle = 'rgba(234, 88, 12, 0.95)';
+        ctx.lineWidth = 3;
+        ctx.fill();
+        ctx.stroke();
+
+        const labelPoint = points[0];
+        if (labelPoint) {
+            const labelX = Number(labelPoint[0]) * width;
+            const labelY = Number(labelPoint[1]) * height;
+            ctx.fillStyle = 'rgba(31, 41, 55, 0.92)';
+            ctx.fillRect(labelX + 6, Math.max(0, labelY - 22), 118, 18);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '12px Arial';
+            ctx.fillText(`Tracking ${selectedSlotId}`, labelX + 10, Math.max(12, labelY - 9));
+        }
+
+        canvas.style.display = 'block';
+    }
+
+    function formatDateTime(isoValue) {
+        if (!isoValue) {
+            return '-';
+        }
+
+        const parsed = new Date(isoValue);
+        if (Number.isNaN(parsed.getTime())) {
+            return '-';
+        }
+
+        const year = parsed.getFullYear();
+        const month = String(parsed.getMonth() + 1).padStart(2, '0');
+        const day = String(parsed.getDate()).padStart(2, '0');
+        const hours = String(parsed.getHours()).padStart(2, '0');
+        const minutes = String(parsed.getMinutes()).padStart(2, '0');
+        const seconds = String(parsed.getSeconds()).padStart(2, '0');
+        return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    }
+
+    function updateSlotTrackingUi(payload) {
+        const slotChip = document.getElementById('tracked-slot-chip');
+        const statusEl = document.getElementById('tracked-slot-status');
+        const startEl = document.getElementById('tracked-start-time');
+        const endEl = document.getElementById('tracked-end-time');
+        const durationEl = document.getElementById('tracked-duration');
+        const sessionEl = document.getElementById('tracked-session-id');
+
+        if (slotChip) {
+            slotChip.textContent = payload.slot_id || '-';
+        }
+        if (statusEl) {
+            statusEl.textContent = payload.status || '-';
+        }
+        if (startEl) {
+            startEl.textContent = formatDateTime(payload.start_time);
+        }
+        if (endEl) {
+            endEl.textContent = formatDateTime(payload.end_time);
+        }
+        if (durationEl) {
+            durationEl.textContent = payload.duration || '-';
+        }
+        if (sessionEl) {
+            sessionEl.textContent = payload.session_id || '-';
+        }
+
+        selectedSlotStatus = payload.status || '';
+        renderSlotHighlightOverlay();
+    }
+
+    async function fetchSelectedSlotStatus() {
+        if (!selectedSlotId) {
+            return;
+        }
+
+        const response = await fetch(`${USER_SLOT_STATUS_ENDPOINT}?slot_id=${encodeURIComponent(selectedSlotId)}&t=${Date.now()}`, {
+            method: 'GET',
+            credentials: 'same-origin',
+            cache: 'no-store',
+        });
+
+        if (!response.ok) {
+            throw new Error('Unable to fetch slot tracking status');
+        }
+
+        return response.json();
+    }
+
+    async function refreshSelectedSlotStatus() {
+        if (!selectedSlotId) {
+            return;
+        }
+
+        try {
+            const payload = await fetchSelectedSlotStatus();
+            if (payload) {
+                updateSlotTrackingUi(payload);
+            }
+        } catch (error) {
+            console.error('Failed to refresh selected slot status:', error);
+            const statusEl = document.getElementById('tracked-slot-status');
+            if (statusEl) {
+                statusEl.textContent = 'Unavailable';
+            }
+        }
+    }
+
+    function startSlotPolling() {
+        if (slotPollTimer) {
+            window.clearInterval(slotPollTimer);
+        }
+
+        if (!selectedSlotId) {
+            return;
+        }
+
+        refreshSelectedSlotStatus();
+        slotPollTimer = window.setInterval(refreshSelectedSlotStatus, USER_SLOT_POLL_INTERVAL_MS);
+    }
+
+    function stopSlotPolling() {
+        if (slotPollTimer) {
+            window.clearInterval(slotPollTimer);
+            slotPollTimer = null;
+        }
+    }
 
     function setLiveBadgeActive(isActive) {
         const liveText = document.querySelector('.live-text');
@@ -74,6 +338,7 @@
 
         setLiveBadgeActive(false);
         updateParkingStats('--', '--', '--');
+        clearSlotHighlightOverlay();
     }
 
     function showFrame(blob) {
@@ -97,6 +362,7 @@
         }
 
         setLiveBadgeActive(true);
+        renderSlotHighlightOverlay();
     }
 
     async function pollFrame() {
@@ -165,21 +431,34 @@
     }
 
     document.addEventListener('DOMContentLoaded', function () {
-        const highlightToggle = document.getElementById('highlightToggle');
-        if (highlightToggle) {
-            highlightToggle.addEventListener('change', function () {
-                if (this.checked) {
-                    console.log('Map highlight enabled');
-                } else {
-                    console.log('Map highlight disabled');
-                }
+        refreshParkingLayout();
+
+        const slotSelect = document.getElementById('trackedSlotSelect');
+        if (slotSelect) {
+            slotSelect.addEventListener('change', function () {
+                selectedSlotId = this.value;
+                setSlotTrackingPlaceholders(selectedSlotId);
+                refreshParkingLayout();
+                startSlotPolling();
             });
         }
+
+        const highlightToggle = document.getElementById('highlightToggle');
+        if (highlightToggle) {
+            highlightEnabled = Boolean(highlightToggle.checked);
+            highlightToggle.addEventListener('change', function () {
+                highlightEnabled = Boolean(this.checked);
+                renderSlotHighlightOverlay();
+            });
+        }
+
+        window.addEventListener('resize', renderSlotHighlightOverlay);
 
         startPolling();
     });
 
     window.addEventListener('beforeunload', function () {
+        stopSlotPolling();
         stopPolling();
     });
 })();
