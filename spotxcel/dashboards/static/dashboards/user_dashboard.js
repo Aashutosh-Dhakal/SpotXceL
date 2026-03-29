@@ -8,6 +8,7 @@
     const USER_PARKING_LAYOUT_ENDPOINT = '/dashboards/api/parking-source/layout/';
     const USER_PARKING_POLL_INTERVAL_MS = 300;
     const USER_SLOT_POLL_INTERVAL_MS = 1000;
+    const USER_LAYOUT_REFRESH_INTERVAL_MS = 2000;
 
     let pollTimer = null;
     let slotPollTimer = null;
@@ -16,6 +17,64 @@
     let selectedSlotStatus = '';
     let highlightEnabled = true;
     let slotLayoutSpaces = [];
+    let parkingFeedActive = false;
+    let lastLayoutRefreshAt = 0;
+
+    function getLayoutSlotIds() {
+        if (!Array.isArray(slotLayoutSpaces)) {
+            return [];
+        }
+
+        const ids = slotLayoutSpaces
+            .map((space) => String((space && space.id) || '').trim())
+            .filter(Boolean);
+        return Array.from(new Set(ids)).sort();
+    }
+
+    function syncSlotSelectorToLayout() {
+        const slotSelect = document.getElementById('trackedSlotSelect');
+        if (!slotSelect) {
+            return;
+        }
+
+        const layoutSlotIds = parkingFeedActive ? getLayoutSlotIds() : [];
+        const previousSlotId = selectedSlotId;
+
+        slotSelect.innerHTML = '';
+
+        const placeholderOption = document.createElement('option');
+        placeholderOption.value = '';
+        if (!parkingFeedActive) {
+            placeholderOption.textContent = 'Choose a slot';
+        } else if (layoutSlotIds.length === 0) {
+            placeholderOption.textContent = 'No parking boxes configured';
+        } else {
+            placeholderOption.textContent = 'Choose a slot';
+        }
+        slotSelect.appendChild(placeholderOption);
+
+        layoutSlotIds.forEach((slotId) => {
+            const option = document.createElement('option');
+            option.value = slotId;
+            option.textContent = slotId;
+            slotSelect.appendChild(option);
+        });
+
+        slotSelect.disabled = !parkingFeedActive || layoutSlotIds.length === 0;
+
+        if (previousSlotId && layoutSlotIds.includes(previousSlotId)) {
+            slotSelect.value = previousSlotId;
+            return;
+        }
+
+        if (previousSlotId) {
+            selectedSlotId = '';
+            stopSlotPolling();
+            setSlotTrackingPlaceholders('');
+        }
+
+        slotSelect.value = '';
+    }
 
     function setSlotTrackingPlaceholders(slotId) {
         const slotChip = document.getElementById('tracked-slot-chip');
@@ -68,7 +127,15 @@
             console.error('Failed to fetch parking layout for highlight:', error);
             slotLayoutSpaces = [];
         }
+        lastLayoutRefreshAt = Date.now();
+        syncSlotSelectorToLayout();
         renderSlotHighlightOverlay();
+    }
+
+    function refreshParkingLayoutIfNeeded(force = false) {
+        if (force || (Date.now() - lastLayoutRefreshAt) >= USER_LAYOUT_REFRESH_INTERVAL_MS) {
+            refreshParkingLayout();
+        }
     }
 
     function getSelectedSlotSpace() {
@@ -315,10 +382,15 @@
         return response.json();
     }
 
-    function showNoFeed(message) {
+    function showNoFeed(message, options) {
+        const nextState = options || {};
         const feedImage = document.getElementById('user-parking-feed');
         const feedVideo = document.getElementById('user-parking-video');
         const noFeedMessage = document.getElementById('user-parking-no-feed');
+
+        if (typeof nextState.feedActive === 'boolean') {
+            parkingFeedActive = nextState.feedActive;
+        }
 
         if (feedImage) {
             feedImage.style.display = 'none';
@@ -338,6 +410,12 @@
 
         setLiveBadgeActive(false);
         updateParkingStats('--', '--', '--');
+        syncSlotSelectorToLayout();
+        if (!parkingFeedActive) {
+            stopSlotPolling();
+            selectedSlotId = '';
+            setSlotTrackingPlaceholders('');
+        }
         clearSlotHighlightOverlay();
     }
 
@@ -347,6 +425,8 @@
         if (!feedImage) {
             return;
         }
+
+        parkingFeedActive = true;
 
         const objectUrl = URL.createObjectURL(blob);
         feedImage.src = objectUrl;
@@ -362,6 +442,7 @@
         }
 
         setLiveBadgeActive(true);
+        syncSlotSelectorToLayout();
         renderSlotHighlightOverlay();
     }
 
@@ -391,20 +472,23 @@
             if (contentType.includes('application/json')) {
                 const payload = await response.json();
                 if (!payload.active) {
-                    showNoFeed('Waiting for admin to select Vehicle Detection Feed source');
+                    showNoFeed('Waiting for admin to select Vehicle Detection Feed source', { feedActive: false });
                 } else {
-                    showNoFeed('Admin source is active. Waiting for fresh frame...');
+                    showNoFeed('Admin source is active. Waiting for fresh frame...', { feedActive: true });
+                    refreshParkingLayoutIfNeeded();
                 }
                 return;
             }
 
             const blob = await response.blob();
             if (!blob || blob.size === 0) {
-                showNoFeed('Admin source is active. Waiting for fresh frame...');
+                showNoFeed('Admin source is active. Waiting for fresh frame...', { feedActive: true });
+                refreshParkingLayoutIfNeeded();
                 return;
             }
 
             showFrame(blob);
+            refreshParkingLayoutIfNeeded();
         } catch (error) {
             console.error('Failed to poll parking feed:', error);
             showNoFeed('Parking feed temporarily unavailable');
@@ -431,6 +515,7 @@
     }
 
     document.addEventListener('DOMContentLoaded', function () {
+        syncSlotSelectorToLayout();
         refreshParkingLayout();
 
         const slotSelect = document.getElementById('trackedSlotSelect');
@@ -438,7 +523,6 @@
             slotSelect.addEventListener('change', function () {
                 selectedSlotId = this.value;
                 setSlotTrackingPlaceholders(selectedSlotId);
-                refreshParkingLayout();
                 startSlotPolling();
             });
         }
