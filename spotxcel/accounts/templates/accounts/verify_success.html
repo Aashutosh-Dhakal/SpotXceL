@@ -8,7 +8,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="auth-container">
+<div class="auth-container" data-redirect-url="{% if user.role == 'admin' %}{% url 'parking_monitoring' %}{% else %}{% url 'user_dashboard' %}{% endif %}">
     <div class="verify-card success-card">
         <div class="card-header">
             <div class="verify-icon-wrapper success">
@@ -29,16 +29,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Redirect after 3 seconds
-    setTimeout(function() {
-        {% if user.role == 'admin' %}
-            window.location.href = "{% url 'parking_monitoring' %}";
-        {% else %}
-            window.location.href = "{% url 'user_dashboard' %}";
-        {% endif %}
-    }, 3000);
-});
-</script>
+<script src="{% static 'accounts/verify_success.js' %}"></script>
 {% endblock %}

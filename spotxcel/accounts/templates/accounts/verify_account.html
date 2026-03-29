@@ -77,39 +77,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Auto-close alert messages after 5 seconds
-    const alerts = document.querySelectorAll('.alert-card');
-    alerts.forEach(alert => {
-        setTimeout(() => { alert.style.display = 'none'; }, 5000);
-    });
-
-    // Confirm before deleting account
-    const deleteBtn = document.getElementById('btn-delete-account');
-    const deleteForm = document.getElementById('delete-form');
-    if (deleteBtn && deleteForm) {
-        deleteBtn.addEventListener('click', function() {
-            if (confirm('Are you sure you want to permanently delete your account? This action cannot be undone.')) {
-                deleteForm.submit();
-            }
-        });
-    }
-
-    // Loading state for Send Verification Email button
-    const verifyForm = document.getElementById('verify-form');
-    const sendBtn = document.getElementById('btn-send-verify');
-    if (verifyForm && sendBtn) {
-        verifyForm.addEventListener('submit', function() {
-            sendBtn.disabled = true;
-            sendBtn.classList.add('btn-loading');
-            document.getElementById('send-icon').classList.add('hidden');
-            document.getElementById('send-text').classList.add('hidden');
-            var spinner = document.getElementById('send-spinner');
-            spinner.classList.remove('send-spinner-hidden');
-            spinner.classList.add('send-spinner-visible');
-        });
-    }
-});
-</script>
+<script src="{% static 'accounts/verify_account.js' %}"></script>
 {% endblock %}

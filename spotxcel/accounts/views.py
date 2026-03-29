@@ -7,7 +7,9 @@ from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from django.conf import settings
+from django.contrib.auth.hashers import make_password, check_password
 import hashlib
+import re
 
 from .models import User
 
@@ -18,6 +20,23 @@ def _redirect_for_role(user):
     if user.role == 'admin':
         return redirect('parking_monitoring')
     return redirect('user_dashboard')
+
+
+_LEGACY_SHA256_RE = re.compile(r'^[0-9a-f]{64}$')
+
+
+def _verify_user_password(user, raw_password):
+    """Verify password and indicate whether the stored hash should be upgraded."""
+    stored = user.password or ''
+
+    if check_password(raw_password, stored):
+        return True, False
+
+    legacy_hash = hashlib.sha256(raw_password.encode()).hexdigest()
+    if _LEGACY_SHA256_RE.match(stored) and stored == legacy_hash:
+        return True, True
+
+    return False, False
 
 
 def signup(request):
@@ -63,8 +82,7 @@ def signup(request):
             messages.error(request, 'Passwords do not match.')
             return render(request, 'accounts/signup.html')
         
-        # Hash the password using SHA-256
-        hashed_password = hashlib.sha256(password.encode()).hexdigest()
+        hashed_password = make_password(password)
         
         try:
             # Create new user
@@ -99,8 +117,8 @@ def signup(request):
                 messages.error(request, 'An error occurred. Please try again.')
             return render(request, 'accounts/signup.html')
         
-        except Exception as e:
-            messages.error(request, f'An unexpected error occurred: {str(e)}')
+        except Exception:
+            messages.error(request, 'An unexpected error occurred. Please try again.')
             return render(request, 'accounts/signup.html')
     
     return render(request, 'accounts/signup.html')
@@ -123,9 +141,6 @@ def login(request):
             messages.error(request, 'Email or username and password are required.')
             return render(request, 'accounts/login.html', {'username': username})
         
-        # Hash the provided password using SHA-256
-        hashed_password = hashlib.sha256(password.encode()).hexdigest()
-        
         try:
             # Try to find user by username or email
             try:
@@ -137,10 +152,13 @@ def login(request):
                     messages.error(request, 'Invalid email or username.')
                     return render(request, 'accounts/login.html', {'username': username})
             
-            # Verify password
-            if user.password == hashed_password:
+            is_valid_password, should_upgrade_hash = _verify_user_password(user, password)
+
+            if is_valid_password:
                 # Update last_logged timestamp
                 user.last_logged = timezone.now()
+                if should_upgrade_hash:
+                    user.password = make_password(password)
                 user.save()
                 
                 # Create session
@@ -165,8 +183,8 @@ def login(request):
                 messages.error(request, 'Invalid password.')
                 return render(request, 'accounts/login.html', {'username': username})
                 
-        except Exception as e:
-            messages.error(request, f'An unexpected error occurred: {str(e)}')
+        except Exception:
+            messages.error(request, 'An unexpected error occurred. Please try again.')
             return render(request, 'accounts/login.html', {'username': username})
     
     return render(request, 'accounts/login.html')
@@ -317,7 +335,7 @@ def reset_password(request, uidb64, token):
             messages.error(request, 'Passwords do not match.')
             return render(request, 'accounts/reset_password.html')
 
-        user.password = hashlib.sha256(password.encode()).hexdigest()
+        user.password = make_password(password)
         user.save()
 
         messages.success(request, 'Your password has been reset successfully. Please log in.')
@@ -349,7 +367,11 @@ def profile(request):
         return redirect('login')
     
     # Get current user
-    user = User.objects.get(user_id=request.session.get('user_id'))
+    try:
+        user = User.objects.get(user_id=request.session.get('user_id'))
+    except User.DoesNotExist:
+        request.session.flush()
+        return redirect('login')
     
     # Enforce email verification
     if not user.verified_status:
@@ -390,19 +412,21 @@ def profile(request):
                 messages.error(request, 'Current password is required to set a new password.')
                 return render(request, 'accounts/profile.html', {'user': user})
             
-            # Hash current password and verify using SHA-256
-            hashed_current = hashlib.sha256(current_password.encode()).hexdigest()
-            if user.password != hashed_current:
+            # Verify current password and support transparent hash upgrade.
+            current_ok, should_upgrade_hash = _verify_user_password(user, current_password)
+            if not current_ok:
                 messages.error(request, 'Current password is incorrect.')
                 return render(request, 'accounts/profile.html', {'user': user})
+
+            if should_upgrade_hash:
+                user.password = make_password(current_password)
             
             # Validate new password length
             if len(new_password) < 8:
                 messages.error(request, 'New password must be at least 8 characters long.')
                 return render(request, 'accounts/profile.html', {'user': user})
             
-            # Update password using SHA-256 hashing
-            user.password = hashlib.sha256(new_password.encode()).hexdigest()
+            user.password = make_password(new_password)
             password_changed = True
         
         # Check if any changes were made
@@ -456,6 +480,9 @@ def send_verification_email(request):
     """Generate a token and send a verification link to the user's email."""
     if not request.session.get('user_id'):
         return redirect('login')
+
+    if request.method != 'POST':
+        return redirect('verify_account')
 
     try:
         user = User.objects.get(user_id=request.session['user_id'])
@@ -560,8 +587,8 @@ def send_verification_email(request):
         email.attach_alternative(html_message, 'text/html')
         email.send()
         messages.success(request, 'Verification email sent! Check your inbox.')
-    except Exception as e:
-        messages.error(request, f'Failed to send email: {str(e)}')
+    except Exception:
+        messages.error(request, 'Failed to send email. Please try again later.')
 
     return redirect('verify_account')
 

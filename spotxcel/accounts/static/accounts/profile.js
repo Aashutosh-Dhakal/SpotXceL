@@ -6,7 +6,7 @@ let originalFormValues = {};
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.querySelector('.profile-form');
     const inputs = form.querySelectorAll('input');
-    
+
     // Store original values
     inputs.forEach(input => {
         if (input.type !== 'password') {

@@ -115,6 +115,10 @@
     opacity: 0.9;
 }
 
+.feed-hidden {
+    display: none;
+}
+
 .user-slot-highlight-canvas {
     position: absolute;
     inset: 0;

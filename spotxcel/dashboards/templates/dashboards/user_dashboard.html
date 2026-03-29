@@ -51,8 +51,8 @@
                 </div>
                 
                 <div class="camera-feed">
-                    <video id="user-parking-video" autoplay playsinline muted style="display: none;"></video>
-                    <img id="user-parking-feed" alt="Parking Space Feed" style="display: none;">
+                    <video id="user-parking-video" autoplay playsinline muted class="feed-hidden"></video>
+                    <img id="user-parking-feed" alt="Parking Space Feed" class="feed-hidden">
                     <canvas id="user-slot-highlight-canvas" class="user-slot-highlight-canvas"></canvas>
                     <div class="user-no-feed-message" id="user-parking-no-feed">
                         <i class="fas fa-video-slash"></i>
@@ -148,15 +148,4 @@
 
 {% block extra_js %}
     <script src="{% static 'dashboards/user_dashboard.js' %}"></script>
-    <script>
-        // Auto-close server-side alert messages after 5 seconds
-        document.addEventListener('DOMContentLoaded', function() {
-            const serverAlerts = document.querySelectorAll('.alert-card');
-            serverAlerts.forEach(alert => {
-                setTimeout(() => {
-                    alert.style.display = 'none';
-                }, 5000);
-            });
-        });
-    </script>
 {% endblock %}

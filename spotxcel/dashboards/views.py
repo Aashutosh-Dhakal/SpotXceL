@@ -16,6 +16,7 @@ import logging
 import os
 import time
 import uuid
+from json import JSONDecodeError
 
 import cv2
 import numpy as np
@@ -981,7 +982,16 @@ def parking_monitoring(request):
 
 
 def _is_admin_session(request):
-    return bool(request.session.get('user_id')) and request.session.get('role') == 'admin'
+    user_id = request.session.get('user_id')
+    if not user_id:
+        return False
+
+    try:
+        user = User.objects.only('role', 'verified_status').get(user_id=user_id)
+    except User.DoesNotExist:
+        return False
+
+    return user.role == 'admin' and bool(user.verified_status)
 
 
 def _admin_guard_or_redirect(request):
@@ -1040,7 +1050,8 @@ def _start_server_feed(runtime, request, feed_name):
             _set_parking_public_feed_state(True, source_type=source_type, source_label=source_label)
         return JsonResponse({'status': 'ok', 'active': True, 'source_type': source_type, 'source_label': source_label})
     except Exception as exc:
-        return JsonResponse({'error': f'Failed to start {feed_name} source: {exc}'}, status=500)
+        logger.exception('Failed to start %s source: %s', feed_name, exc)
+        return JsonResponse({'error': f'Failed to start {feed_name} source'}, status=500)
 
 
 def _remove_server_feed(runtime, request, feed_name):
@@ -1193,7 +1204,7 @@ def save_parking_layout(request):
 
     try:
         payload = json.loads(request.body.decode('utf-8') or '{}')
-    except Exception:
+    except (UnicodeDecodeError, JSONDecodeError):
         return JsonResponse({'error': 'Invalid JSON payload'}, status=400)
 
     spaces = payload.get('spaces', [])
@@ -1215,7 +1226,7 @@ def update_parking_source_state(request):
 
     try:
         payload = json.loads(request.body.decode('utf-8') or '{}')
-    except Exception:
+    except (UnicodeDecodeError, JSONDecodeError):
         return JsonResponse({'error': 'Invalid JSON payload'}, status=400)
 
     active = bool(payload.get('active', False))
