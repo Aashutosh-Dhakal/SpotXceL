@@ -398,16 +398,17 @@
 }
 
 .terms-modal-content h2 {
-    margin: 0 0 1rem;
+    margin: 0 0 1.25rem;
     color: #111827;
-    font-size: 1.35rem;
+    font-size: 1.4rem;
     font-weight: 700;
+    text-align: center;
 }
 
 .terms-modal-body {
     display: flex;
     flex-direction: column;
-    gap: 0.9rem;
+    gap: 1rem;
 }
 
 .terms-modal-body p {
@@ -415,6 +416,26 @@
     color: #374151;
     font-size: 0.95rem;
     line-height: 1.6;
+}
+
+.terms-modal-body ul {
+    margin: 0;
+    padding-left: 1.35rem;
+    display: grid;
+    gap: 0.65rem;
+}
+
+.terms-modal-body li {
+    color: #374151;
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+.terms-acknowledgement {
+    padding-top: 0.25rem;
+    border-top: 1px solid #E5E7EB;
+    font-weight: 600;
+    color: #1F2937;
 }
 
 /* Submit Button */

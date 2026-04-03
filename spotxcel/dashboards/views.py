@@ -1547,8 +1547,8 @@ def parking_records(request):
     })
 
 
-def parking_fee(request):
-    """Allow admin to set fee allocation unit/rate and preview recent session fees."""
+def parking_settings(request):
+    """Allow admin to configure parking fee allocation settings."""
     guard = _admin_guard_or_redirect(request)
     if guard:
         return guard
@@ -1565,7 +1565,7 @@ def parking_fee(request):
         }
         if billing_unit not in valid_units:
             messages.error(request, 'Invalid billing unit selected.')
-            return redirect('parking_fee')
+            return redirect('parking_settings')
 
         try:
             rate_value = Decimal(rate_raw)
@@ -1574,7 +1574,7 @@ def parking_fee(request):
             rate_value = rate_value.quantize(Decimal('0.01'))
         except Exception:
             messages.error(request, 'Rate must be a valid non-negative amount.')
-            return redirect('parking_fee')
+            return redirect('parking_settings')
 
         ParkingFeeConfig.objects.filter(is_active=True).update(is_active=False)
         ParkingFeeConfig.objects.create(
@@ -1583,29 +1583,22 @@ def parking_fee(request):
             is_active=True,
         )
         messages.success(request, 'Parking fee settings updated successfully.')
-        return redirect('parking_fee')
+        return redirect('parking_settings')
 
     fee_config = _get_active_parking_fee_config()
-    records = ParkingRecord.objects.all().order_by('-entry_time')[:25]
-
-    recent_sessions = []
-    total_recent_fee = Decimal('0.00')
-    for record in records:
-        fee_data = _calculate_parking_fee_for_record(record, fee_config)
-        total_recent_fee += fee_data['fee']
-        recent_sessions.append({
-            'record': record,
-            'duration': fee_data['duration'],
-            'billable_units': fee_data['billable_units'],
-            'fee': fee_data['fee'],
-        })
-
-    return render(request, 'dashboards/parking_fee.html', {
+    return render(request, 'dashboards/parking_settings.html', {
         'fee_config': fee_config,
         'unit_choices': ParkingFeeConfig.BILLING_UNIT_CHOICES,
-        'recent_sessions': recent_sessions,
-        'total_recent_fee': total_recent_fee,
     })
+
+
+def system_stats(request):
+    """Render placeholder System Stats page for future implementation."""
+    guard = _admin_guard_or_redirect(request)
+    if guard:
+        return guard
+
+    return render(request, 'dashboards/system_stats.html')
 
 
 def plate_detection_history(request):

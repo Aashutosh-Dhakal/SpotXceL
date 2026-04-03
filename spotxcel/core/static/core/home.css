@@ -142,9 +142,13 @@
     transform: translateY(-1px);
 }
 
-.stat-card.available { border-top: 3px solid #047857; }
-.stat-card.occupied  { border-top: 3px solid #B91C1C; }
-.stat-card.total     { border-top: 3px solid #1D4ED8; }
+.stat-card.available { border: 2px solid #047857; }
+.stat-card.occupied  { border: 2px solid #B91C1C; }
+.stat-card.total     { border: 2px solid #1D4ED8; }
+
+.stat-card.available:hover { border-color: #047857; }
+.stat-card.occupied:hover  { border-color: #B91C1C; }
+.stat-card.total:hover     { border-color: #1D4ED8; }
 
 .stat-content {
     display: flex;

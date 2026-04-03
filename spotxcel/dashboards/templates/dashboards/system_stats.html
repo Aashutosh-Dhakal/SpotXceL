@@ -1,0 +1,54 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block title %}System Stats - SpotXceL{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'dashboards/parking_records.css' %}">
+{% endblock %}
+
+{% block content %}
+    <div class="container">
+        <div class="nav-tabs">
+            <a href="{% url 'parking_monitoring' %}" class="nav-tab">
+                <i class="fas fa-camera"></i>
+                <span>Parking Lot Monitoring</span>
+            </a>
+            <a href="{% url 'user_management' %}" class="nav-tab">
+                <i class="fas fa-users"></i>
+                <span>User Management System</span>
+            </a>
+            <a href="{% url 'parking_records' %}" class="nav-tab">
+                <i class="fas fa-clock"></i>
+                <span>Parking Records</span>
+            </a>
+            <a href="{% url 'plate_detection_history' %}" class="nav-tab">
+                <i class="fas fa-id-card"></i>
+                <span>Plate Detection History</span>
+            </a>
+            <a href="{% url 'parking_settings' %}" class="nav-tab">
+                <i class="fas fa-coins"></i>
+                <span>Parking Settings</span>
+            </a>
+            <a href="{% url 'system_stats' %}" class="nav-tab active">
+                <i class="fas fa-chart-line"></i>
+                <span>System Stats</span>
+            </a>
+        </div>
+
+        <div class="page-header">
+            <div>
+                <h1>System Stats</h1>
+                <p>This page is intentionally left blank for now.</p>
+            </div>
+        </div>
+
+        <div class="table-card">
+            <div class="pagination-section">
+                <div class="pagination-info">
+                    <p>System statistics widgets will be added here.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
