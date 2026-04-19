@@ -74,7 +74,7 @@
         <!-- Filter Section -->
         <div class="filter-card">
             <form method="GET" action="{% url 'parking_records' %}">
-                <div class="filter-grid">
+                <div class="filter-grid records-filter-grid">
                     <div class="filter-item">
                         <label for="vehicle-number">Vehicle Number / Session / Slot</label>
                         <div class="input-with-icon">
@@ -83,10 +83,35 @@
                         </div>
                     </div>
                     <div class="filter-item">
-                        <label for="date">Date</label>
+                        <label for="period">Stats Period</label>
                         <div class="input-with-icon">
                             <i class="fas fa-calendar-alt"></i>
-                            <input type="date" id="date" name="date" value="{{ date_query }}">
+                            <select id="period" name="period">
+                                <option value="day" {% if period == 'day' %}selected{% endif %}>Specific Day</option>
+                                <option value="month" {% if period == 'month' %}selected{% endif %}>Specific Month</option>
+                                <option value="year" {% if period == 'year' %}selected{% endif %}>Specific Year</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="filter-item period-input period-day {% if period != 'day' %}hidden{% endif %}">
+                        <label for="period-day">Day</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-calendar-day"></i>
+                            <input type="date" id="period-day" name="day" value="{{ day_value }}">
+                        </div>
+                    </div>
+                    <div class="filter-item period-input period-month {% if period != 'month' %}hidden{% endif %}">
+                        <label for="period-month">Month</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-calendar"></i>
+                            <input type="month" id="period-month" name="month" value="{{ month_value }}">
+                        </div>
+                    </div>
+                    <div class="filter-item period-input period-year {% if period != 'year' %}hidden{% endif %}">
+                        <label for="period-year">Year</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-calendar"></i>
+                            <input type="number" min="2000" max="2100" id="period-year" name="year" value="{{ year_value }}" placeholder="YYYY">
                         </div>
                     </div>
                     <div class="filter-actions">
@@ -163,8 +188,35 @@
             <!-- Pagination -->
             <div class="pagination-section">
                 <div class="pagination-info">
-                    <p>Showing <span class="font-medium">{{ records|length }}</span> result{{ records|length|pluralize }}</p>
+                    <p>
+                        Showing <span class="font-medium">{{ records.start_index }}</span>
+                        to <span class="font-medium">{{ records.end_index }}</span>
+                        of <span class="font-medium">{{ records.paginator.count }}</span> results
+                    </p>
                 </div>
+                {% if records.paginator.num_pages > 1 %}
+                    <div class="pagination-controls">
+                        {% if records.has_previous %}
+                            <a class="pagination-btn" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ records.previous_page_number }}">Prev</a>
+                        {% else %}
+                            <button class="pagination-btn" disabled>Prev</button>
+                        {% endif %}
+
+                        {% for page_num in records.paginator.page_range %}
+                            {% if page_num == records.number %}
+                                <button class="pagination-btn active" disabled>{{ page_num }}</button>
+                            {% elif page_num >= records.number|add:'-2' and page_num <= records.number|add:'2' %}
+                                <a class="pagination-btn" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_num }}">{{ page_num }}</a>
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if records.has_next %}
+                            <a class="pagination-btn" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ records.next_page_number }}">Next</a>
+                        {% else %}
+                            <button class="pagination-btn" disabled>Next</button>
+                        {% endif %}
+                    </div>
+                {% endif %}
             </div>
         </div>
     </div>

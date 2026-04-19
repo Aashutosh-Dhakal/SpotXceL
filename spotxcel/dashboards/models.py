@@ -89,3 +89,20 @@ class ParkingFeeConfig(models.Model):
 			self.UNIT_MONTH: 'Month',
 		}
 		return f"{unit_labels.get(self.billing_unit, 'Hour')} - Rs {self.rate}"
+
+
+class DetectionConfidenceConfig(models.Model):
+	plate_detection_confidence = models.FloatField(default=0.25)
+	parking_detection_confidence = models.FloatField(default=0.50)
+	is_active = models.BooleanField(default=True)
+	created_at = models.DateTimeField(default=timezone.now)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		ordering = ['-updated_at']
+
+	def __str__(self):
+		return (
+			f"Plate {self.plate_detection_confidence:.2f} / "
+			f"Parking {self.parking_detection_confidence:.2f}"
+		)

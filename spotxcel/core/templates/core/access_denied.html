@@ -1,0 +1,49 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block title %}Access Denied - SpotXceL{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'core/access_denied.css' %}">
+{% endblock %}
+
+{% block content %}
+    <section class="denied-wrap" aria-labelledby="denied-title">
+        <div class="denied-card">
+            <div class="denied-icon" aria-hidden="true">
+                <i class="fas fa-user-lock"></i>
+            </div>
+
+            <h1 id="denied-title" class="denied-title">
+                <span class="denied-title-dark">Access</span>
+                <span class="denied-title-accent">Denied</span>
+            </h1>
+
+            <p class="denied-message">
+                {{ denied_message }}
+                It looks like you tried to open a restricted area of the SpotXceL system.
+            </p>
+
+            <div class="denied-actions">
+                {% if request.session.user_id and request.session.role == 'admin' %}
+                    <a href="{% url 'parking_monitoring' %}" class="btn-primary-action">
+                        <i class="fas fa-house"></i>
+                        Return Dashboard
+                    </a>
+                {% elif request.session.user_id and request.session.role == 'driver' %}
+                    <a href="{% url 'user_dashboard' %}" class="btn-primary-action">
+                        <i class="fas fa-house"></i>
+                        Return Dashboard
+                    </a>
+                {% else %}
+                    <a href="{% url 'home' %}" class="btn-primary-action">
+                        <i class="fas fa-house"></i>
+                        Return Home
+                    </a>
+                {% endif %}
+            </div>
+
+            <div class="denied-footer">Error Code: 403 Forbidden</div>
+        </div>
+    </section>
+{% endblock %}

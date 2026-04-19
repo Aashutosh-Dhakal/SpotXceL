@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import ParkingFeeConfig, ParkingRecord, PlateDetectionHistory
+from .models import DetectionConfidenceConfig, ParkingFeeConfig, ParkingRecord, PlateDetectionHistory
 
 
 @admin.register(PlateDetectionHistory)
@@ -42,3 +42,14 @@ class ParkingFeeConfigAdmin(admin.ModelAdmin):
 	)
 	list_filter = ('billing_unit', 'is_active', 'created_at')
 	search_fields = ('billing_unit',)
+
+
+@admin.register(DetectionConfidenceConfig)
+class DetectionConfidenceConfigAdmin(admin.ModelAdmin):
+	list_display = (
+		'plate_detection_confidence',
+		'parking_detection_confidence',
+		'is_active',
+		'created_at',
+	)
+	list_filter = ('is_active', 'created_at')

@@ -19,6 +19,7 @@
     let slotLayoutSpaces = [];
     let parkingFeedActive = false;
     let lastLayoutRefreshAt = 0;
+    let lastLayoutSlotIds = [];
 
     function getLayoutSlotIds() {
         if (!Array.isArray(slotLayoutSpaces)) {
@@ -39,6 +40,19 @@
 
         const layoutSlotIds = parkingFeedActive ? getLayoutSlotIds() : [];
         const previousSlotId = selectedSlotId;
+        const previousSelectValue = slotSelect.value;
+
+        // Check if we need to rebuild the options
+        const currentOptions = Array.from(slotSelect.options)
+            .map(opt => opt.value)
+            .filter(v => v !== '');
+        
+        const optionsChanged = JSON.stringify(currentOptions.sort()) !== JSON.stringify(layoutSlotIds.sort());
+
+        // Only rebuild if options actually changed
+        if (!optionsChanged) {
+            return;
+        }
 
         slotSelect.innerHTML = '';
 
@@ -62,18 +76,21 @@
 
         slotSelect.disabled = !parkingFeedActive || layoutSlotIds.length === 0;
 
+        // Restore the previous selection
         if (previousSlotId && layoutSlotIds.includes(previousSlotId)) {
             slotSelect.value = previousSlotId;
-            return;
-        }
-
-        if (previousSlotId) {
+        } else if (!parkingFeedActive && previousSlotId) {
+            // Only clear selection if feed became inactive
             selectedSlotId = '';
             stopSlotPolling();
             setSlotTrackingPlaceholders('');
+            slotSelect.value = '';
+        } else if (previousSlotId) {
+            // Feed is active, keep previous selection value even if not in layout
+            slotSelect.value = previousSlotId;
+        } else {
+            slotSelect.value = '';
         }
-
-        slotSelect.value = '';
     }
 
     function setSlotTrackingPlaceholders(slotId) {
@@ -128,7 +145,16 @@
             slotLayoutSpaces = [];
         }
         lastLayoutRefreshAt = Date.now();
-        syncSlotSelectorToLayout();
+        
+        // Only sync selector if layout slot IDs actually changed
+        const currentLayoutSlotIds = getLayoutSlotIds();
+        const layoutChanged = JSON.stringify(currentLayoutSlotIds) !== JSON.stringify(lastLayoutSlotIds);
+        
+        if (layoutChanged) {
+            lastLayoutSlotIds = currentLayoutSlotIds;
+            syncSlotSelectorToLayout();
+        }
+        
         renderSlotHighlightOverlay();
     }
 
@@ -164,7 +190,7 @@
     }
 
     function renderSlotHighlightOverlay() {
-        const shouldHighlight = highlightEnabled && selectedSlotId && selectedSlotStatus === 'In Progress';
+        const shouldHighlight = highlightEnabled && selectedSlotId;
         if (!shouldHighlight) {
             clearSlotHighlightOverlay();
             return;
@@ -426,6 +452,7 @@
             return;
         }
 
+        const wasFeedInactive = !parkingFeedActive;
         parkingFeedActive = true;
 
         const objectUrl = URL.createObjectURL(blob);
@@ -442,7 +469,12 @@
         }
 
         setLiveBadgeActive(true);
-        syncSlotSelectorToLayout();
+        
+        // Only sync slot selector when feed transitions from inactive to active
+        if (wasFeedInactive) {
+            syncSlotSelectorToLayout();
+        }
+        
         renderSlotHighlightOverlay();
     }
 
@@ -517,6 +549,7 @@
     document.addEventListener('DOMContentLoaded', function () {
         syncSlotSelectorToLayout();
         refreshParkingLayout();
+        lastLayoutSlotIds = getLayoutSlotIds();
 
         const slotSelect = document.getElementById('trackedSlotSelect');
         if (slotSelect) {

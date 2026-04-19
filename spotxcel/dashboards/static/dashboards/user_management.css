@@ -370,6 +370,10 @@
     cursor: pointer;
     border-radius: 3px;
     transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .pagination-btn:hover:not(:disabled) {

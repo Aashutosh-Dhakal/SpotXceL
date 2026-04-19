@@ -138,6 +138,7 @@
             if (action === 'clear') {
                 this._pushUndoSnapshot();
                 this.spaces = [];
+                   this.nextId = 1;
                 this.selectedId = null;
                 this._render();
                 return;

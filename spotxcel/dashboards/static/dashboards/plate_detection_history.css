@@ -52,12 +52,13 @@
 }
 
 .plate-history-filter-grid {
-    grid-template-columns: minmax(260px, 1fr) minmax(260px, 1fr) minmax(180px, 220px) auto;
+    grid-template-columns: minmax(320px, 1.8fr) minmax(190px, 1fr) minmax(190px, 1fr) minmax(190px, 1fr) auto;
 }
 
 .plate-history-filter-grid .filter-actions {
     align-self: end;
     white-space: nowrap;
+    justify-self: end;
 }
 
 .filter-item select {
