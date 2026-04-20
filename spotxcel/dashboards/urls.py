@@ -13,6 +13,7 @@ urlpatterns = [
     path('api/parking-source/status/', views.parking_source_status, name='parking_source_status'),
     path('api/parking-source/live-frame/', views.parking_live_frame, name='parking_live_frame'),
     path('api/parking-source/live-metadata/', views.parking_live_metadata, name='parking_live_metadata'),
+    path('api/parking-source/today-revenue/', views.parking_today_revenue, name='parking_today_revenue'),
     path('api/parking-source/slot-status/', views.user_slot_tracking_status, name='user_slot_tracking_status'),
     path('api/parking-source/public-stats/', views.parking_public_stats, name='parking_public_stats'),
     path('api/parking-source/layout/', views.get_parking_layout, name='get_parking_layout'),

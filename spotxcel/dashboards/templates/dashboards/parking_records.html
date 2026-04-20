@@ -138,12 +138,14 @@
                             <th>Duration</th>
                             <th>Fee (Rs)</th>
                             <th>Slot ID</th>
+                            <th>Vehicle Type</th>
                             <th>Vehicle ID</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% if records %}
-                            {% for record in records %}
+                        {% if record_rows %}
+                            {% for row in record_rows %}
+                            {% with record=row.record fee_info=row.fee_info %}
                             <tr>
                                 <td><span class="session-id">{{ record.session_id }}</span></td>
                                 <td class="text-secondary">{{ record.entry_time|date:'Y-m-d H:i:s' }}</td>
@@ -164,21 +166,29 @@
                                     </span>
                                 </td>
                                 <td class="{% if record.is_active %}duration-active{% else %}text-secondary{% endif %}">{{ record.duration_display }}</td>
-                                <td class="text-secondary">Rs --</td>
+                                <td class="text-secondary">Rs {{ fee_info.fee|floatformat:2 }}</td>
                                 <td><span class="slot-badge">{{ record.slot_id }}</span></td>
+                                <td><span class="slot-badge">{{ record.vehicle_type_display }}</span></td>
                                 <td>
                                     <div class="vehicle-info">
                                         <div class="vehicle-icon {% if record.is_active %}active{% endif %}">
-                                            <i class="fas fa-car"></i>
+                                            {% if record.vehicle_type == 'van' %}
+                                                <i class="fas fa-shuttle-van"></i>
+                                            {% elif record.vehicle_type == 'motor' %}
+                                                <i class="fas fa-motorcycle"></i>
+                                            {% else %}
+                                                <i class="fas fa-car"></i>
+                                            {% endif %}
                                         </div>
                                         <div class="vehicle-number">{{ record.vehicle_display }}</div>
                                     </div>
                                 </td>
                             </tr>
+                            {% endwith %}
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="8" class="empty-state-cell">No parking records found.</td>
+                                <td colspan="9" class="empty-state-cell">No parking records found.</td>
                             </tr>
                         {% endif %}
                     </tbody>

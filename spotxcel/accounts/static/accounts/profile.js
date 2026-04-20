@@ -13,6 +13,16 @@ document.addEventListener('DOMContentLoaded', function() {
             originalFormValues[input.id || input.name] = input.value;
         }
     });
+
+    const deleteAccountForm = document.getElementById('delete-account-form');
+    if (deleteAccountForm) {
+        deleteAccountForm.addEventListener('submit', function(e) {
+            const confirmed = window.confirm('Are you sure you want to delete your account? This action is permanent and cannot be undone.');
+            if (!confirmed) {
+                e.preventDefault();
+            }
+        });
+    }
 });
 
 // Show alert message
@@ -153,41 +163,47 @@ function resetForm() {
     }
 }
 
-// Add Vehicle Button
-document.getElementById('addVehicleBtn').addEventListener('click', function() {
-    const vehiclesList = document.getElementById('vehiclesList');
-    
-    // Create new vehicle item
-    const vehicleItem = document.createElement('div');
-    vehicleItem.className = 'vehicle-item';
-    vehicleItem.innerHTML = `
-        <div class="vehicle-field">
-            <label>Vehicle Type</label>
-            <div class="input-with-icon">
-                <i class="fas fa-car"></i>
-                <select name="vehicle_type[]">
-                    <option selected>Passenger Car</option>
-                    <option>Motorcycle</option>
-                    <option>SUV / Van</option>
-                    <option>Truck</option>
-                </select>
+// Add Vehicle Button (optional; section may be hidden/removed)
+const addVehicleBtn = document.getElementById('addVehicleBtn');
+if (addVehicleBtn) {
+    addVehicleBtn.addEventListener('click', function() {
+        const vehiclesList = document.getElementById('vehiclesList');
+        if (!vehiclesList) {
+            return;
+        }
+
+        // Create new vehicle item
+        const vehicleItem = document.createElement('div');
+        vehicleItem.className = 'vehicle-item';
+        vehicleItem.innerHTML = `
+            <div class="vehicle-field">
+                <label>Vehicle Type</label>
+                <div class="input-with-icon">
+                    <i class="fas fa-car"></i>
+                    <select name="vehicle_type[]">
+                        <option selected>Passenger Car</option>
+                        <option>Motorcycle</option>
+                        <option>SUV / Van</option>
+                        <option>Truck</option>
+                    </select>
+                </div>
             </div>
-        </div>
-        <div class="vehicle-field">
-            <label>Number Plate</label>
-            <div class="input-with-icon">
-                <i class="fas fa-hashtag"></i>
-                <input type="text" name="number_plate[]" placeholder="ABC-123" class="plate-input">
+            <div class="vehicle-field">
+                <label>Number Plate</label>
+                <div class="input-with-icon">
+                    <i class="fas fa-hashtag"></i>
+                    <input type="text" name="number_plate[]" placeholder="ABC-123" class="plate-input">
+                </div>
             </div>
-        </div>
-        <button type="button" class="btn-remove-vehicle" onclick="removeVehicle(this)">
-            <i class="fas fa-trash"></i>
-            <span class="btn-text">Remove</span>
-        </button>
-    `;
-    
-    vehiclesList.appendChild(vehicleItem);
-});
+            <button type="button" class="btn-remove-vehicle" onclick="removeVehicle(this)">
+                <i class="fas fa-trash"></i>
+                <span class="btn-text">Remove</span>
+            </button>
+        `;
+
+        vehiclesList.appendChild(vehicleItem);
+    });
+}
 
 // Remove Vehicle Function
 function removeVehicle(button) {

@@ -50,7 +50,7 @@
                     <label for="username">Username</label>
                     <div class="input-wrapper">
                         <i class="fas fa-user input-icon"></i>
-                        <input type="text" id="username" name="username" required/>
+                        <input type="text" id="username" name="username" value="{{ username|default:'' }}" required/>
                     </div>
                 </div>
 
@@ -58,7 +58,7 @@
                     <label for="email">Email Address</label>
                     <div class="input-wrapper">
                         <i class="fas fa-envelope input-icon"></i>
-                        <input type="email" id="email" name="email" required/>
+                        <input type="email" id="email" name="email" value="{{ email|default:'' }}" required/>
                     </div>
                 </div>
 

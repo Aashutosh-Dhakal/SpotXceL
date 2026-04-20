@@ -115,7 +115,10 @@ def signup(request):
                 messages.error(request, 'Email already registered. Please use another email.')
             else:
                 messages.error(request, 'An error occurred. Please try again.')
-            return render(request, 'accounts/signup.html')
+            return render(request, 'accounts/signup.html', {
+                'username': username,
+                'email': email,
+            })
         
         except Exception:
             messages.error(request, 'An unexpected error occurred. Please try again.')
@@ -135,6 +138,7 @@ def login(request):
     if request.method == 'POST':
         username = request.POST.get('username', '').strip()
         password = request.POST.get('password', '')
+        generic_login_error = 'Invalid credentials. Please try again.'
         
         # Server-side validation
         if not username or not password:
@@ -149,7 +153,7 @@ def login(request):
                 try:
                     user = User.objects.get(email=username)
                 except User.DoesNotExist:
-                    messages.error(request, 'Invalid email or username.')
+                    messages.error(request, generic_login_error)
                     return render(request, 'accounts/login.html', {'username': username})
             
             is_valid_password, should_upgrade_hash = _verify_user_password(user, password)
@@ -180,7 +184,7 @@ def login(request):
                 else:
                     return redirect('user_dashboard')  # Drivers go to user dashboard
             else:
-                messages.error(request, 'Invalid password.')
+                messages.error(request, generic_login_error)
                 return render(request, 'accounts/login.html', {'username': username})
                 
         except Exception:

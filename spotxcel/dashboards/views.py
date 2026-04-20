@@ -1,5 +1,6 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
+from django.db import transaction
 from django.db.models import Q, Count, Avg
 from django.db.models.functions import TruncDate, ExtractHour, ExtractMonth
 from django.http import JsonResponse, HttpResponse
@@ -101,6 +102,10 @@ _parking_layout_lock = Lock()
 _parking_layout_spaces = []
 
 ALLOWED_VEHICLE_CLASS_NAMES = {'car', 'van', 'motor'}
+VEHICLE_TYPE_LABELS = {
+    'car': 'Car',
+    'motor': 'Motorbike',
+}
 VEHICLE_BOX_COLOR_BGR = (255, 0, 0)
 VEHICLE_BOX_THICKNESS = 2
 
@@ -310,6 +315,7 @@ def _draw_server_parking_layout_overlay(frame, detections):
     overlay = frame.copy()
     occupied_count = 0
     occupied_slot_ids = []
+    occupied_slot_vehicle_types = {}
 
     for idx, space in enumerate(spaces):
         points_px = []
@@ -330,6 +336,7 @@ def _draw_server_parking_layout_overlay(frame, detections):
         }
 
         occupied = False
+        matched_vehicle_type = None
         for det in detections:
             iou = _bbox_iou_dict(
                 {
@@ -342,6 +349,7 @@ def _draw_server_parking_layout_overlay(frame, detections):
             )
             if iou > 0.3:
                 occupied = True
+                matched_vehicle_type = _normalize_vehicle_type(det.get('class_name'))
                 break
 
             centroid = (
@@ -350,11 +358,13 @@ def _draw_server_parking_layout_overlay(frame, detections):
             )
             if _point_in_polygon(centroid, points_px):
                 occupied = True
+                matched_vehicle_type = _normalize_vehicle_type(det.get('class_name'))
                 break
 
         if occupied:
             occupied_count += 1
             occupied_slot_ids.append(slot_id)
+            occupied_slot_vehicle_types[slot_id] = matched_vehicle_type or ParkingRecord.VEHICLE_TYPE_CAR
 
         poly = np.array(points_px, dtype=np.int32)
         fill_color = (60, 60, 255) if occupied else (60, 200, 60)
@@ -368,7 +378,7 @@ def _draw_server_parking_layout_overlay(frame, detections):
             ly = ly + 16 if ly < 16 else ly - 6
             cv2.putText(frame, label, (lx + 4, ly), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2, cv2.LINE_AA)
 
-    _sync_parking_record_tracker(occupied_slot_ids)
+    _sync_parking_record_tracker(occupied_slot_vehicle_types)
 
     cv2.addWeighted(overlay, 0.24, frame, 0.76, 0, frame)
     total_count = len(spaces)
@@ -776,17 +786,36 @@ def _get_active_detection_confidence_config():
     return config
 
 
+def _normalize_vehicle_type(raw_value):
+    normalized = str(raw_value or '').strip().lower().replace('-', '_').replace(' ', '_')
+    if normalized in {'van', 'car'}:
+        return ParkingFeeConfig.VEHICLE_TYPE_CAR
+    if normalized in {'motor', 'motorbike', 'motorcycle'}:
+        return ParkingFeeConfig.VEHICLE_TYPE_MOTOR
+    return ParkingFeeConfig.VEHICLE_TYPE_CAR
+
+
+def _get_fee_config_display_label(vehicle_type):
+    normalized = _normalize_vehicle_type(vehicle_type)
+    return VEHICLE_TYPE_LABELS.get(normalized, 'Car')
+
+
 def _generate_parking_session_id():
     return f"PR-{timezone.now():%Y%m%d%H%M%S}-{uuid.uuid4().hex[:6].upper()}"
 
 
-def _start_parking_record(slot_id, vehicle_id=''):
+def _start_parking_record(slot_id, vehicle_id='', vehicle_type='car'):
     normalized_vehicle = str(vehicle_id or '').strip()
+    normalized_vehicle_type = _normalize_vehicle_type(vehicle_type)
+    fee_config = _get_active_parking_fee_config(normalized_vehicle_type)
     record = ParkingRecord.objects.create(
         session_id=_generate_parking_session_id(),
         entry_time=timezone.now(),
         slot_id=(str(slot_id or '').strip() or 'Unknown')[:64],
         vehicle_id=normalized_vehicle[:64],
+        vehicle_type=normalized_vehicle_type,
+        fee_billing_unit=getattr(fee_config, 'billing_unit', '') or '',
+        fee_rate=getattr(fee_config, 'rate', None),
         plate_detected=bool(normalized_vehicle),
     )
     logger.info('Parking record started -> %s (%s)', record.session_id, record.slot_id)
@@ -798,17 +827,23 @@ def _close_parking_record(record_id):
     return bool(updated)
 
 
-def _sync_parking_record_tracker(occupied_slot_ids):
-    normalized_occupied = {
-        (str(slot_id or '').strip() or 'Unknown')[:64]
-        for slot_id in occupied_slot_ids
-    }
+def _sync_parking_record_tracker(occupied_slot_info):
+    if isinstance(occupied_slot_info, dict):
+        normalized_occupied = {
+            (str(slot_id or '').strip() or 'Unknown')[:64]: _normalize_vehicle_type(vehicle_type)
+            for slot_id, vehicle_type in occupied_slot_info.items()
+        }
+    else:
+        normalized_occupied = {
+            (str(slot_id or '').strip() or 'Unknown')[:64]: ParkingRecord.VEHICLE_TYPE_CAR
+            for slot_id in occupied_slot_info
+        }
 
     with _parking_record_tracker_lock:
-        for slot_id in normalized_occupied:
+        for slot_id, vehicle_type in normalized_occupied.items():
             active = _active_parking_records_by_slot.get(slot_id)
             if active is None:
-                record_id = _start_parking_record(slot_id)
+                record_id = _start_parking_record(slot_id, vehicle_type=vehicle_type)
                 _active_parking_records_by_slot[slot_id] = {
                     'record_id': record_id,
                     'miss_frames': 0,
@@ -861,11 +896,35 @@ def _iso_or_none(value):
     return value.isoformat() if value else None
 
 
-def _get_active_parking_fee_config():
-    return ParkingFeeConfig.objects.filter(is_active=True).order_by('-created_at').first()
+def _get_active_parking_fee_config(vehicle_type='car'):
+    normalized_vehicle_type = _normalize_vehicle_type(vehicle_type)
+    return ParkingFeeConfig.objects.filter(
+        vehicle_type=normalized_vehicle_type,
+        is_active=True,
+    ).order_by('-created_at').first()
 
 
-def _calculate_parking_fee_for_record(record, fee_config):
+def _get_active_parking_fee_configs():
+    return {vehicle_type: _get_active_parking_fee_config(vehicle_type) for vehicle_type in VEHICLE_TYPE_LABELS}
+
+
+def _get_historical_fee_config_for_record(record):
+    normalized_vehicle_type = _normalize_vehicle_type(getattr(record, 'vehicle_type', 'car'))
+    entry_time = getattr(record, 'entry_time', None)
+    if entry_time is None:
+        return _get_active_parking_fee_config(normalized_vehicle_type)
+
+    fee_config = ParkingFeeConfig.objects.filter(
+        vehicle_type=normalized_vehicle_type,
+        created_at__lte=entry_time,
+    ).order_by('-created_at').first()
+    if fee_config is not None:
+        return fee_config
+
+    return _get_active_parking_fee_config(normalized_vehicle_type)
+
+
+def _calculate_parking_fee_for_record(record, fee_config=None):
     unit_seconds_map = {
         ParkingFeeConfig.UNIT_MINUTE: 60,
         ParkingFeeConfig.UNIT_HOUR: 3600,
@@ -874,23 +933,64 @@ def _calculate_parking_fee_for_record(record, fee_config):
     }
 
     if fee_config is None:
+        stored_billing_unit = str(getattr(record, 'fee_billing_unit', '') or '').strip().lower()
+        stored_rate = getattr(record, 'fee_rate', None)
+        if stored_billing_unit and stored_rate is not None:
+            fee_config = {
+                'billing_unit': stored_billing_unit,
+                'rate': stored_rate,
+                'vehicle_type': _normalize_vehicle_type(getattr(record, 'vehicle_type', 'car')),
+            }
+        else:
+            fee_config = _get_historical_fee_config_for_record(record)
+
+    if fee_config is None:
         return {
             'duration': record.duration_display,
             'billable_units': 0,
             'fee': Decimal('0.00'),
+            'vehicle_type': _normalize_vehicle_type(getattr(record, 'vehicle_type', 'car')),
         }
+
+    billing_unit = fee_config['billing_unit'] if isinstance(fee_config, dict) else fee_config.billing_unit
+    rate_value = fee_config['rate'] if isinstance(fee_config, dict) else fee_config.rate
+    config_vehicle_type = fee_config['vehicle_type'] if isinstance(fee_config, dict) else fee_config.vehicle_type
 
     end_time = record.exit_time or timezone.now()
     total_seconds = max(0, int((end_time - record.entry_time).total_seconds()))
-    seconds_per_unit = unit_seconds_map.get(fee_config.billing_unit, 3600)
+    seconds_per_unit = unit_seconds_map.get(billing_unit, 3600)
     billable_units = max(1, int(math.ceil(total_seconds / float(seconds_per_unit))))
-    fee_amount = (Decimal(billable_units) * fee_config.rate).quantize(Decimal('0.01'))
+    fee_amount = (Decimal(billable_units) * Decimal(rate_value)).quantize(Decimal('0.01'))
 
     return {
         'duration': _format_duration_seconds(record.entry_time, record.exit_time),
         'billable_units': billable_units,
         'fee': fee_amount,
+        'vehicle_type': _normalize_vehicle_type(getattr(record, 'vehicle_type', config_vehicle_type)),
+        'billing_unit': billing_unit,
     }
+
+
+def _get_today_revenue_total():
+    """Return total revenue for records that exited on the current local day."""
+    today_local = timezone.localtime(timezone.now()).date()
+    completed_today = ParkingRecord.objects.filter(
+        exit_time__isnull=False,
+        exit_time__date=today_local,
+    ).only(
+        'entry_time',
+        'exit_time',
+        'vehicle_type',
+        'fee_billing_unit',
+        'fee_rate',
+    )
+
+    today_revenue = Decimal('0.00')
+    for record in completed_today.iterator():
+        fee_info = _calculate_parking_fee_for_record(record)
+        today_revenue += fee_info['fee']
+
+    return today_revenue
 
 
 def _normalize_plate_type(raw_value):
@@ -1021,7 +1121,13 @@ def parking_monitoring(request):
     if guard:
         return guard
 
-    return render(request, 'dashboards/parking_monitoring.html')
+    return render(
+        request,
+        'dashboards/parking_monitoring.html',
+        {
+            'today_revenue': float(_get_today_revenue_total()),
+        },
+    )
 
 
 def _is_admin_session(request):
@@ -1227,6 +1333,16 @@ def parking_live_metadata(request):
         'frame_height': meta.get('frame_height'),
         'occupancy_stats': occupancy_stats,
         'updated_at': snap.get('updated_at'),
+    })
+
+
+def parking_today_revenue(request):
+    if not _is_admin_session(request):
+        return JsonResponse({'error': 'Admin privileges required'}, status=403)
+
+    return JsonResponse({
+        'today_revenue': float(_get_today_revenue_total()),
+        'currency': 'Rs',
     })
 
 
@@ -1671,12 +1787,20 @@ def parking_records(request):
     paginator = Paginator(records, 10)
     page_number = request.GET.get('page', 1)
     records_page = paginator.get_page(page_number)
+    record_rows = []
+    for record in records_page:
+        fee_info = _calculate_parking_fee_for_record(record)
+        record_rows.append({
+            'record': record,
+            'fee_info': fee_info,
+        })
 
     query_params = request.GET.copy()
     query_params.pop('page', None)
 
     return render(request, 'dashboards/parking_records.html', {
         'records': records_page,
+        'record_rows': record_rows,
         'vehicle_query': vehicle_query,
         'date_query': selected_day,
         'period': period,
@@ -1693,30 +1817,40 @@ def parking_settings(request):
     if guard:
         return guard
 
+    vehicle_types = list(VEHICLE_TYPE_LABELS.keys())
     if request.method == 'POST':
-        billing_unit = request.POST.get('billing_unit', '').strip().lower()
-        rate_raw = request.POST.get('rate', '').strip()
-        plate_conf_raw = request.POST.get('plate_detection_confidence', '').strip()
-        parking_conf_raw = request.POST.get('parking_detection_confidence', '').strip()
-
+        fee_payloads = {}
         valid_units = {
             ParkingFeeConfig.UNIT_MINUTE,
             ParkingFeeConfig.UNIT_HOUR,
             ParkingFeeConfig.UNIT_DAY,
             ParkingFeeConfig.UNIT_MONTH,
         }
-        if billing_unit not in valid_units:
-            messages.error(request, 'Invalid billing unit selected.')
-            return redirect('parking_settings')
 
-        try:
-            rate_value = Decimal(rate_raw)
-            if rate_value < 0:
-                raise ValueError()
-            rate_value = rate_value.quantize(Decimal('0.01'))
-        except Exception:
-            messages.error(request, 'Rate must be a valid non-negative amount.')
-            return redirect('parking_settings')
+        for vehicle_type in vehicle_types:
+            billing_unit = request.POST.get(f'{vehicle_type}_billing_unit', '').strip().lower()
+            rate_raw = request.POST.get(f'{vehicle_type}_rate', '').strip()
+
+            if billing_unit not in valid_units:
+                messages.error(request, f'Invalid billing unit selected for {VEHICLE_TYPE_LABELS[vehicle_type].lower()}.')
+                return redirect('parking_settings')
+
+            try:
+                rate_value = Decimal(rate_raw)
+                if rate_value < 0:
+                    raise ValueError()
+                rate_value = rate_value.quantize(Decimal('0.01'))
+            except Exception:
+                messages.error(request, f'Rate must be a valid non-negative amount for {VEHICLE_TYPE_LABELS[vehicle_type].lower()}.')
+                return redirect('parking_settings')
+
+            fee_payloads[vehicle_type] = {
+                'billing_unit': billing_unit,
+                'rate': rate_value,
+            }
+
+        plate_conf_raw = request.POST.get('plate_detection_confidence', '').strip()
+        parking_conf_raw = request.POST.get('parking_detection_confidence', '').strip()
 
         try:
             plate_conf_value = float(plate_conf_raw)
@@ -1727,12 +1861,15 @@ def parking_settings(request):
             messages.error(request, 'Model confidence values must be between 0.00 and 1.00.')
             return redirect('parking_settings')
 
-        ParkingFeeConfig.objects.filter(is_active=True).update(is_active=False)
-        ParkingFeeConfig.objects.create(
-            billing_unit=billing_unit,
-            rate=rate_value,
-            is_active=True,
-        )
+        with transaction.atomic():
+            for vehicle_type, payload in fee_payloads.items():
+                ParkingFeeConfig.objects.filter(vehicle_type=vehicle_type, is_active=True).update(is_active=False)
+                ParkingFeeConfig.objects.create(
+                    vehicle_type=vehicle_type,
+                    billing_unit=payload['billing_unit'],
+                    rate=payload['rate'],
+                    is_active=True,
+                )
 
         DetectionConfidenceConfig.objects.filter(is_active=True).update(is_active=False)
         DetectionConfidenceConfig.objects.create(
@@ -1744,10 +1881,18 @@ def parking_settings(request):
         messages.success(request, 'Parking settings updated successfully.')
         return redirect('parking_settings')
 
-    fee_config = _get_active_parking_fee_config()
+    fee_configs = _get_active_parking_fee_configs()
+    vehicle_fee_configs = [
+        {
+            'vehicle_type': vehicle_type,
+            'vehicle_label': VEHICLE_TYPE_LABELS[vehicle_type],
+            'config': fee_configs.get(vehicle_type),
+        }
+        for vehicle_type in vehicle_types
+    ]
     confidence_config = _get_active_detection_confidence_config()
     return render(request, 'dashboards/parking_settings.html', {
-        'fee_config': fee_config,
+        'vehicle_fee_configs': vehicle_fee_configs,
         'confidence_config': confidence_config,
         'unit_choices': ParkingFeeConfig.BILLING_UNIT_CHOICES,
     })
@@ -1855,14 +2000,20 @@ def system_stats(request):
     total_detections = all_detections.count()
     avg_confidence = all_detections.aggregate(avg=Avg('confidence')).get('avg') or 0.0
 
-    active_fee_config = _get_active_parking_fee_config()
-    completed_records = all_records.filter(exit_time__isnull=False).only('entry_time', 'exit_time', 'slot_id')
+    completed_records = all_records.filter(exit_time__isnull=False).only(
+        'entry_time',
+        'exit_time',
+        'slot_id',
+        'vehicle_type',
+        'fee_billing_unit',
+        'fee_rate',
+    )
     total_revenue = Decimal('0.00')
     period_revenue = Decimal('0.00')
     slot_duration_totals = {}
 
     for record in completed_records.iterator():
-        fee_info = _calculate_parking_fee_for_record(record, active_fee_config)
+        fee_info = _calculate_parking_fee_for_record(record)
         total_revenue += fee_info['fee']
 
         if record.exit_time and period_start_date <= timezone.localtime(record.exit_time).date() < period_end_date:

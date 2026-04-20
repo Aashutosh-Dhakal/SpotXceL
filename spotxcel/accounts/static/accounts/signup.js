@@ -232,8 +232,8 @@ document.addEventListener('DOMContentLoaded', function() {
             return false;
         }
         
-        // Email validation
-        if (!email || !email.includes('@')) {
+        // Email validation (match backend rule: must contain both @ and .)
+        if (!email || !email.includes('@') || !email.includes('.')) {
             e.preventDefault();
             showAlert('Please enter a valid email address.');
             emailInput.classList.add('input-error');

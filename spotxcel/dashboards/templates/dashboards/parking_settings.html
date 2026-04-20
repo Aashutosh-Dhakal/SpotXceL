@@ -60,7 +60,7 @@
         <div class="page-header">
             <div>
                 <h1>Parking Settings</h1>
-                <p>Set fee allocation and detector confidence thresholds for parking and plate recognition.</p>
+                <p>Set separate fee allocation for car and motorbike vehicles, plus detector confidence thresholds.</p>
             </div>
         </div>
 
@@ -70,28 +70,48 @@
                 <section class="settings-card">
                     <div class="settings-section-header">
                         <h2>Fee Allocation</h2>
-                        <p>Sessions are always charged at least 1 selected unit.</p>
+                        <p>Car and van share the same billing rules under Car. Motorbike has its own separate billing rules. Sessions are always charged at least 1 selected unit.</p>
                     </div>
-                    <div class="filter-grid parking-fee-grid">
-                        <div class="filter-item">
-                            <label for="billing_unit">Fee Allocation Unit</label>
-                            <div class="input-with-icon">
-                                <i class="fas fa-hourglass-half"></i>
-                                <select id="billing_unit" name="billing_unit" required>
-                                    {% for value, label in unit_choices %}
-                                        <option value="{{ value }}" {% if fee_config and fee_config.billing_unit == value %}selected{% endif %}>{{ label }}</option>
-                                    {% endfor %}
-                                </select>
+                    <div class="vehicle-fee-grid">
+                        {% for item in vehicle_fee_configs %}
+                        <article class="vehicle-fee-card">
+                            <div class="vehicle-fee-card-header">
+                                <h3>{{ item.vehicle_label }}</h3>
+                                <span class="vehicle-fee-chip">Active config</span>
                             </div>
-                        </div>
+                            <div class="filter-grid parking-fee-grid">
+                                <div class="filter-item">
+                                    <label for="{{ item.vehicle_type }}_billing_unit">Billing Unit</label>
+                                    <div class="input-with-icon">
+                                        <i class="fas fa-hourglass-half"></i>
+                                        <select id="{{ item.vehicle_type }}_billing_unit" name="{{ item.vehicle_type }}_billing_unit" required>
+                                            {% for value, label in unit_choices %}
+                                                <option value="{{ value }}" {% if item.config and item.config.billing_unit == value %}selected{% endif %}>{{ label }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
 
-                        <div class="filter-item">
-                            <label for="rate">Rate (Rs per Unit)</label>
-                            <div class="input-with-icon">
-                                <i class="fas fa-rupee-sign"></i>
-                                <input id="rate" name="rate" type="number" min="0" step="0.01" required value="{% if fee_config %}{{ fee_config.rate }}{% else %}0.00{% endif %}">
+                                <div class="filter-item">
+                                    <label for="{{ item.vehicle_type }}_rate">Rate (Rs per Unit)</label>
+                                    <div class="input-with-icon">
+                                        <i class="fas fa-rupee-sign"></i>
+                                        <input id="{{ item.vehicle_type }}_rate" name="{{ item.vehicle_type }}_rate" type="number" min="0" step="0.01" required value="{% if item.config %}{{ item.config.rate }}{% else %}0.00{% endif %}">
+                                    </div>
+                                </div>
                             </div>
-                        </div>
+                            <div class="fee-summary-row">
+                                <span>Current:</span>
+                                <strong>
+                                    {% if item.config %}
+                                        {{ item.config.rate }} Rs / {% if item.config.billing_unit == 'minute' %}Minute{% elif item.config.billing_unit == 'hour' %}Hour{% elif item.config.billing_unit == 'day' %}Day{% else %}Month{% endif %}
+                                    {% else %}
+                                        0.00 Rs / Hour
+                                    {% endif %}
+                                </strong>
+                            </div>
+                        </article>
+                        {% endfor %}
                     </div>
                 </section>
 

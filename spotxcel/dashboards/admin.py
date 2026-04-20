@@ -26,22 +26,26 @@ class ParkingRecordAdmin(admin.ModelAdmin):
 		'exit_time',
 		'slot_id',
 		'vehicle_id',
+		'vehicle_type',
+		'fee_billing_unit',
+		'fee_rate',
 		'plate_detected',
 	)
-	search_fields = ('session_id', 'slot_id', 'vehicle_id')
-	list_filter = ('plate_detected', 'entry_time', 'exit_time')
+	search_fields = ('session_id', 'slot_id', 'vehicle_id', 'vehicle_type', 'fee_billing_unit')
+	list_filter = ('vehicle_type', 'fee_billing_unit', 'plate_detected', 'entry_time', 'exit_time')
 
 
 @admin.register(ParkingFeeConfig)
 class ParkingFeeConfigAdmin(admin.ModelAdmin):
 	list_display = (
+		'vehicle_type',
 		'billing_unit',
 		'rate',
 		'is_active',
 		'created_at',
 	)
-	list_filter = ('billing_unit', 'is_active', 'created_at')
-	search_fields = ('billing_unit',)
+	list_filter = ('vehicle_type', 'billing_unit', 'is_active', 'created_at')
+	search_fields = ('vehicle_type', 'billing_unit')
 
 
 @admin.register(DetectionConfidenceConfig)

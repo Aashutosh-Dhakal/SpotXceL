@@ -20,12 +20,14 @@
         parkingStatus: '/dashboards/api/parking-source/status/',
         parkingFrame: '/dashboards/api/parking-source/live-frame/',
         parkingMeta: '/dashboards/api/parking-source/live-metadata/',
+        todayRevenue: '/dashboards/api/parking-source/today-revenue/',
         parkingLayout: '/dashboards/api/parking-source/layout/',
         parkingLayoutSave: '/dashboards/api/parking-source/layout/save/',
     };
 
     const FEED_LOOP_DELAY_MS = 30;
     const PARKING_META_REFRESH_MS = 400;
+    const TODAY_REVENUE_REFRESH_MS = 30000;
 
     let currentFeedType = null;
     let pendingRemovalFeedType = null;
@@ -37,6 +39,30 @@
     let entryFrameInFlight = false;
     let parkingFrameInFlight = false;
     let parkingMetaLastFetchAt = 0;
+    let todayRevenueTimer = null;
+
+    function formatCurrencyAmount(value) {
+        const numericValue = Number(value);
+        if (!Number.isFinite(numericValue)) {
+            return 'Rs 0';
+        }
+
+        const rounded = Math.round((numericValue + Number.EPSILON) * 100) / 100;
+        const hasDecimalPart = Math.abs(rounded - Math.trunc(rounded)) > 0;
+
+        return `Rs ${rounded.toLocaleString('en-NP', {
+            minimumFractionDigits: hasDecimalPart ? 2 : 0,
+            maximumFractionDigits: 2,
+        })}`;
+    }
+
+    function setTodayRevenue(value) {
+        const revenueValue = document.getElementById('todayRevenueValue');
+        if (!revenueValue) {
+            return;
+        }
+        revenueValue.textContent = formatCurrencyAmount(value);
+    }
 
     let parkingEditorInstance = null;
     let parkingSpaces = [];
@@ -275,6 +301,18 @@
         return response.json();
     }
 
+    async function requestTodayRevenue() {
+        const response = await fetch(`${API.todayRevenue}?t=${Date.now()}`, {
+            method: 'GET',
+            credentials: 'same-origin',
+            cache: 'no-store',
+        });
+        if (!response.ok) {
+            return null;
+        }
+        return response.json();
+    }
+
     async function refreshParkingStatsFromMetadata(force = false) {
         const now = Date.now();
         if (!force && now - parkingMetaLastFetchAt < PARKING_META_REFRESH_MS) {
@@ -298,6 +336,20 @@
             }
         } catch (error) {
             console.error('Failed to refresh parking stats metadata:', error);
+        }
+    }
+
+    async function refreshTodayRevenue() {
+        try {
+            const payload = await requestTodayRevenue();
+            if (!payload) {
+                return;
+            }
+            if (Object.prototype.hasOwnProperty.call(payload, 'today_revenue')) {
+                setTodayRevenue(payload.today_revenue);
+            }
+        } catch (error) {
+            console.error('Failed to refresh today revenue:', error);
         }
     }
 
@@ -983,6 +1035,12 @@
 
     document.addEventListener('DOMContentLoaded', function () {
         syncInitialFeedStatus();
+        refreshTodayRevenue();
+
+        if (todayRevenueTimer) {
+            clearInterval(todayRevenueTimer);
+        }
+        todayRevenueTimer = window.setInterval(refreshTodayRevenue, TODAY_REVENUE_REFRESH_MS);
 
         const closeBtn = document.getElementById('parkingEditorModalCloseBtn');
         if (closeBtn) {

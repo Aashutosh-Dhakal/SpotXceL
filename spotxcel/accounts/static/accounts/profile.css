@@ -417,6 +417,73 @@
     font-size: 0.8125rem;
 }
 
+/* ---- Danger Zone ---- */
+.danger-zone-card {
+    margin-top: 18px;
+    padding: 16px;
+    background: #fff;
+    border: 1px solid #E5E7EB;
+    border-radius: 4px;
+}
+
+.danger-zone {
+    padding: 16px 20px;
+    border: 1px solid #FECACA;
+    background: #FEF2F2;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.danger-zone-header {
+    margin: 0;
+}
+
+.danger-zone-header h3 {
+    margin: 0 0 4px;
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: #B91C1C;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.danger-zone-header p {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: #7F1D1D;
+}
+
+#delete-account-form {
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.btn-delete-account {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-width: 148px;
+    padding: 10px 16px;
+    border: 1px solid #DC2626;
+    background: #DC2626;
+    color: #fff;
+    border-radius: 3px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.15s, border-color 0.15s;
+}
+
+.btn-delete-account:hover {
+    background: #B91C1C;
+    border-color: #B91C1C;
+}
+
 .btn-remove-vehicle {
     display: flex;
     align-items: center;
@@ -554,5 +621,19 @@
     .btn-save {
         width: 100%;
         justify-content: center;
+    }
+    .danger-zone {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+    .danger-zone-card {
+        padding: 12px;
+    }
+    #delete-account-form {
+        width: 100%;
+    }
+    .btn-delete-account {
+        width: 100%;
     }
 }

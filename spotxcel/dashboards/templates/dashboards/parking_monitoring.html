@@ -165,8 +165,7 @@
                 <!-- Today's Revenue Card -->
                 <div class="stat-card">
                     <div class="stat-label">Today's Revenue</div>
-                    <div class="stat-value">Rs 0</div>
-                    <i class="fas fa-wallet stat-icon orange"></i>
+                    <div class="stat-value" id="todayRevenueValue">Rs {{ today_revenue|floatformat:-2 }}</div>
                     <div class="revenue-change">
                         <i class="fas fa-arrow-trend-up"></i>
                         <span>Income</span>

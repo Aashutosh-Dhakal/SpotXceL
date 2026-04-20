@@ -20,11 +20,22 @@ class PlateDetectionHistory(models.Model):
 
 
 class ParkingRecord(models.Model):
+	VEHICLE_TYPE_CAR = 'car'
+	VEHICLE_TYPE_MOTOR = 'motor'
+
+	VEHICLE_TYPE_CHOICES = [
+		(VEHICLE_TYPE_CAR, 'Car'),
+		(VEHICLE_TYPE_MOTOR, 'Motorbike'),
+	]
+
 	session_id = models.CharField(max_length=32, unique=True)
 	entry_time = models.DateTimeField(default=timezone.now)
 	exit_time = models.DateTimeField(null=True, blank=True)
 	slot_id = models.CharField(max_length=64, default='Unknown')
 	vehicle_id = models.CharField(max_length=64, blank=True, default='')
+	vehicle_type = models.CharField(max_length=16, choices=VEHICLE_TYPE_CHOICES, default=VEHICLE_TYPE_CAR)
+	fee_billing_unit = models.CharField(max_length=16, blank=True, default='')
+	fee_rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, default=None)
 	plate_detected = models.BooleanField(default=False)
 
 	class Meta:
@@ -40,6 +51,11 @@ class ParkingRecord(models.Model):
 	@property
 	def vehicle_display(self):
 		return self.vehicle_id if self.vehicle_id else 'Not Detected'
+
+	@property
+	def vehicle_type_display(self):
+		labels = dict(self.VEHICLE_TYPE_CHOICES)
+		return labels.get(self.vehicle_type, 'Car')
 
 	@property
 	def duration_display(self):
@@ -60,6 +76,14 @@ class ParkingRecord(models.Model):
 
 
 class ParkingFeeConfig(models.Model):
+	VEHICLE_TYPE_CAR = 'car'
+	VEHICLE_TYPE_MOTOR = 'motor'
+
+	VEHICLE_TYPE_CHOICES = [
+		(VEHICLE_TYPE_CAR, 'Car'),
+		(VEHICLE_TYPE_MOTOR, 'Motorbike'),
+	]
+
 	UNIT_MINUTE = 'minute'
 	UNIT_HOUR = 'hour'
 	UNIT_DAY = 'day'
@@ -72,6 +96,7 @@ class ParkingFeeConfig(models.Model):
 		(UNIT_MONTH, 'Month'),
 	]
 
+	vehicle_type = models.CharField(max_length=16, choices=VEHICLE_TYPE_CHOICES, default=VEHICLE_TYPE_CAR)
 	billing_unit = models.CharField(max_length=16, choices=BILLING_UNIT_CHOICES, default=UNIT_HOUR)
 	rate = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
 	is_active = models.BooleanField(default=True)
@@ -82,13 +107,14 @@ class ParkingFeeConfig(models.Model):
 		ordering = ['-created_at']
 
 	def __str__(self):
+		vehicle_labels = dict(self.VEHICLE_TYPE_CHOICES)
 		unit_labels = {
 			self.UNIT_MINUTE: 'Minute',
 			self.UNIT_HOUR: 'Hour',
 			self.UNIT_DAY: 'Day',
 			self.UNIT_MONTH: 'Month',
 		}
-		return f"{unit_labels.get(self.billing_unit, 'Hour')} - Rs {self.rate}"
+		return f"{vehicle_labels.get(self.vehicle_type, 'Car')} | {unit_labels.get(self.billing_unit, 'Hour')} - Rs {self.rate}"
 
 
 class DetectionConfidenceConfig(models.Model):
