@@ -100,6 +100,8 @@ _parking_public_feed_updated_at = 0.0
 
 _parking_layout_lock = Lock()
 _parking_layout_spaces = []
+_parking_entry_zone = None
+_parking_exit_zone = None
 
 ALLOWED_VEHICLE_CLASS_NAMES = {'car', 'van', 'motor'}
 VEHICLE_TYPE_LABELS = {
@@ -158,6 +160,7 @@ def _annotate_entry_frame(frame):
         )
 
     current_detections = []
+    meta_detections = []
     boxes = results[0].boxes
     if boxes is not None and len(boxes):
         h, w = frame.shape[:2]
@@ -183,8 +186,29 @@ def _annotate_entry_frame(frame):
                 'plate_type': plate_type,
             })
 
+            if text:
+                _queue_entry_plate(text, plate_type)
+
+            meta_detections.append({
+                'x1': x1,
+                'y1': y1,
+                'x2': x2,
+                'y2': y2,
+                'text': text,
+                'confidence': float(conf),
+                'plate_type': _normalize_plate_type(plate_type),
+            })
+
     _update_tracker(current_detections)
-    return _draw_license_plate_boxes(frame, results[0])
+    annotated = _draw_license_plate_boxes(frame, results[0])
+    return {
+        'frame': annotated,
+        'meta': {
+            'detections': meta_detections,
+            'frame_width': int(frame.shape[1]),
+            'frame_height': int(frame.shape[0]),
+        },
+    }
 
 
 def _annotate_parking_frame(frame):
@@ -205,6 +229,8 @@ def _annotate_parking_frame(frame):
         )
 
     detections = _extract_allowed_vehicle_detections(results[0], allowed_class_ids)
+    detections = _assign_track_ids_to_detections(detections)
+    detections = _apply_entry_exit_zone_assignments(detections, frame.shape[1], frame.shape[0])
     annotated = _draw_allowed_vehicle_boxes(frame, results[0], allowed_class_ids)
     annotated, occupancy_stats = _draw_server_parking_layout_overlay(annotated, detections)
     return {
@@ -218,42 +244,56 @@ def _annotate_parking_frame(frame):
     }
 
 
-def _set_parking_layout_spaces(spaces):
-    """Persist normalized parking-space layout used by server-side overlay."""
-    normalized = []
+def _normalize_layout_polygon(raw_shape):
+    if not isinstance(raw_shape, dict):
+        return None
+
+    points = raw_shape.get('points')
+    if not isinstance(points, list) or len(points) < 3:
+        return None
+
+    norm_points = []
+    for pair in points:
+        if not isinstance(pair, (list, tuple)) or len(pair) < 2:
+            continue
+        try:
+            nx = float(pair[0])
+            ny = float(pair[1])
+        except (TypeError, ValueError):
+            continue
+        norm_points.append([
+            min(1.0, max(0.0, nx)),
+            min(1.0, max(0.0, ny)),
+        ])
+
+    if len(norm_points) < 3:
+        return None
+
+    return {
+        'id': str(raw_shape.get('id', '')),
+        'points': norm_points,
+    }
+
+
+def _set_parking_layout_spaces(spaces, entry_zone=None, exit_zone=None):
+    """Persist normalized parking layout and optional entry/exit zones."""
+    normalized_spaces = []
     if isinstance(spaces, list):
         for raw_space in spaces:
-            if not isinstance(raw_space, dict):
+            normalized_space = _normalize_layout_polygon(raw_space)
+            if not normalized_space:
                 continue
-            points = raw_space.get('points')
-            if not isinstance(points, list) or len(points) < 3:
-                continue
+            normalized_spaces.append(normalized_space)
 
-            norm_points = []
-            for pair in points:
-                if not isinstance(pair, (list, tuple)) or len(pair) < 2:
-                    continue
-                try:
-                    nx = float(pair[0])
-                    ny = float(pair[1])
-                except (TypeError, ValueError):
-                    continue
-                norm_points.append([
-                    min(1.0, max(0.0, nx)),
-                    min(1.0, max(0.0, ny)),
-                ])
-
-            if len(norm_points) < 3:
-                continue
-
-            normalized.append({
-                'id': str(raw_space.get('id', '')),
-                'points': norm_points,
-            })
+    normalized_entry_zone = _normalize_layout_polygon(entry_zone)
+    normalized_exit_zone = _normalize_layout_polygon(exit_zone)
 
     with _parking_layout_lock:
         _parking_layout_spaces.clear()
-        _parking_layout_spaces.extend(normalized)
+        _parking_layout_spaces.extend(normalized_spaces)
+        global _parking_entry_zone, _parking_exit_zone
+        _parking_entry_zone = normalized_entry_zone
+        _parking_exit_zone = normalized_exit_zone
 
 
 def _get_parking_layout_spaces():
@@ -265,6 +305,26 @@ def _get_parking_layout_spaces():
             }
             for space in _parking_layout_spaces
         ]
+
+
+def _get_parking_entry_zone():
+    with _parking_layout_lock:
+        if not _parking_entry_zone:
+            return None
+        return {
+            'id': _parking_entry_zone.get('id', ''),
+            'points': [point[:] for point in _parking_entry_zone.get('points', [])],
+        }
+
+
+def _get_parking_exit_zone():
+    with _parking_layout_lock:
+        if not _parking_exit_zone:
+            return None
+        return {
+            'id': _parking_exit_zone.get('id', ''),
+            'points': [point[:] for point in _parking_exit_zone.get('points', [])],
+        }
 
 
 def _bbox_iou_dict(a, b):
@@ -301,6 +361,28 @@ def _point_in_polygon(point, polygon):
     return inside
 
 
+def _polygon_from_normalized(shape, width, height):
+    if not shape or not isinstance(shape, dict):
+        return []
+    points = shape.get('points') or []
+    polygon = []
+    for pair in points:
+        if not isinstance(pair, (list, tuple)) or len(pair) < 2:
+            continue
+        try:
+            polygon.append((float(pair[0]) * float(width), float(pair[1]) * float(height)))
+        except (TypeError, ValueError):
+            continue
+    return polygon
+
+
+def _detection_centroid(det):
+    return (
+        (float(det['x1']) + float(det['x2'])) / 2.0,
+        (float(det['y1']) + float(det['y2'])) / 2.0,
+    )
+
+
 def _draw_server_parking_layout_overlay(frame, detections):
     """Draw saved parking spaces with occupied/empty highlight on server-rendered frame."""
     spaces = _get_parking_layout_spaces()
@@ -314,8 +396,7 @@ def _draw_server_parking_layout_overlay(frame, detections):
     h, w = frame.shape[:2]
     overlay = frame.copy()
     occupied_count = 0
-    occupied_slot_ids = []
-    occupied_slot_vehicle_types = {}
+    occupied_slot_info = {}
 
     for idx, space in enumerate(spaces):
         points_px = []
@@ -337,6 +418,7 @@ def _draw_server_parking_layout_overlay(frame, detections):
 
         occupied = False
         matched_vehicle_type = None
+        matched_vehicle_id = ''
         for det in detections:
             iou = _bbox_iou_dict(
                 {
@@ -350,21 +432,22 @@ def _draw_server_parking_layout_overlay(frame, detections):
             if iou > 0.3:
                 occupied = True
                 matched_vehicle_type = _normalize_vehicle_type(det.get('class_name'))
+                matched_vehicle_id = str(det.get('plate_text') or '').strip()
                 break
 
-            centroid = (
-                (float(det['x1']) + float(det['x2'])) / 2.0,
-                (float(det['y1']) + float(det['y2'])) / 2.0,
-            )
+            centroid = _detection_centroid(det)
             if _point_in_polygon(centroid, points_px):
                 occupied = True
                 matched_vehicle_type = _normalize_vehicle_type(det.get('class_name'))
+                matched_vehicle_id = str(det.get('plate_text') or '').strip()
                 break
 
         if occupied:
             occupied_count += 1
-            occupied_slot_ids.append(slot_id)
-            occupied_slot_vehicle_types[slot_id] = matched_vehicle_type or ParkingRecord.VEHICLE_TYPE_CAR
+            occupied_slot_info[slot_id] = {
+                'vehicle_type': matched_vehicle_type or ParkingRecord.VEHICLE_TYPE_CAR,
+                'vehicle_id': matched_vehicle_id,
+            }
 
         poly = np.array(points_px, dtype=np.int32)
         fill_color = (60, 60, 255) if occupied else (60, 200, 60)
@@ -378,7 +461,23 @@ def _draw_server_parking_layout_overlay(frame, detections):
             ly = ly + 16 if ly < 16 else ly - 6
             cv2.putText(frame, label, (lx + 4, ly), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2, cv2.LINE_AA)
 
-    _sync_parking_record_tracker(occupied_slot_vehicle_types)
+    entry_polygon = _polygon_from_normalized(_get_parking_entry_zone(), w, h)
+    if len(entry_polygon) >= 3:
+        entry_poly = np.array(entry_polygon, dtype=np.int32)
+        cv2.fillPoly(overlay, [entry_poly], (20, 120, 220))
+        cv2.polylines(frame, [entry_poly], True, (30, 160, 255), 2)
+        ex, ey = entry_polygon[0]
+        cv2.putText(frame, 'ENTRY', (int(ex) + 4, int(ey) - 6 if ey > 20 else int(ey) + 18), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2, cv2.LINE_AA)
+
+    exit_polygon = _polygon_from_normalized(_get_parking_exit_zone(), w, h)
+    if len(exit_polygon) >= 3:
+        exit_poly = np.array(exit_polygon, dtype=np.int32)
+        cv2.fillPoly(overlay, [exit_poly], (60, 60, 220))
+        cv2.polylines(frame, [exit_poly], True, (80, 80, 255), 2)
+        sx, sy = exit_polygon[0]
+        cv2.putText(frame, 'EXIT', (int(sx) + 4, int(sy) - 6 if sy > 20 else int(sy) + 18), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2, cv2.LINE_AA)
+
+    _sync_parking_record_tracker(occupied_slot_info)
 
     cv2.addWeighted(overlay, 0.24, frame, 0.76, 0, frame)
     total_count = len(spaces)
@@ -774,6 +873,167 @@ _parking_record_tracker_lock = Lock()
 _active_parking_records_by_slot = {}
 _PARKING_EXIT_MISS_FRAMES = 10
 
+_entry_plate_queue_lock = Lock()
+_entry_plate_queue = []
+_entry_plate_last_seen = {}
+_ENTRY_PLATE_QUEUE_LIMIT = 25
+_ENTRY_PLATE_DEDUP_SECONDS = 6.0
+
+_parking_track_lock = Lock()
+_parking_next_track_id = 1
+_parking_active_tracks = {}
+_parking_track_plate_assignments = {}
+_PARKING_TRACK_MAX_MISS_FRAMES = 15
+_PARKING_TRACK_MATCH_DISTANCE_PX = 90.0
+
+
+def _queue_entry_plate(plate_text, plate_type):
+    normalized_text = str(plate_text or '').strip().upper()
+    if not normalized_text:
+        return
+
+    now_ts = time.time()
+    with _entry_plate_queue_lock:
+        last_seen = _entry_plate_last_seen.get(normalized_text, 0.0)
+        if now_ts - last_seen < _ENTRY_PLATE_DEDUP_SECONDS:
+            return
+
+        _entry_plate_last_seen[normalized_text] = now_ts
+        _entry_plate_queue.append({
+            'plate_text': normalized_text,
+            'plate_type': _normalize_plate_type(plate_type),
+            'queued_at': now_ts,
+        })
+        if len(_entry_plate_queue) > _ENTRY_PLATE_QUEUE_LIMIT:
+            _entry_plate_queue[:] = _entry_plate_queue[-_ENTRY_PLATE_QUEUE_LIMIT:]
+
+
+def _pop_next_entry_plate():
+    with _entry_plate_queue_lock:
+        if not _entry_plate_queue:
+            return None
+        return _entry_plate_queue.pop(0)
+
+
+def _reset_entry_plate_queue():
+    with _entry_plate_queue_lock:
+        _entry_plate_queue.clear()
+        _entry_plate_last_seen.clear()
+
+
+def _assign_track_ids_to_detections(detections):
+    global _parking_next_track_id
+    now_ts = time.time()
+    assigned = []
+
+    with _parking_track_lock:
+        for track in _parking_active_tracks.values():
+            track['matched'] = False
+
+        for det in detections:
+            centroid = _detection_centroid(det)
+            best_track_id = None
+            best_distance = None
+
+            for track_id, track in _parking_active_tracks.items():
+                distance = math.dist(centroid, track['centroid'])
+                if distance > _PARKING_TRACK_MATCH_DISTANCE_PX:
+                    continue
+                if best_distance is None or distance < best_distance:
+                    best_distance = distance
+                    best_track_id = track_id
+
+            if best_track_id is None:
+                best_track_id = _parking_next_track_id
+                _parking_next_track_id += 1
+                _parking_active_tracks[best_track_id] = {
+                    'centroid': centroid,
+                    'miss_frames': 0,
+                    'matched': True,
+                    'last_seen': now_ts,
+                }
+            else:
+                _parking_active_tracks[best_track_id].update({
+                    'centroid': centroid,
+                    'miss_frames': 0,
+                    'matched': True,
+                    'last_seen': now_ts,
+                })
+
+            enriched = dict(det)
+            enriched['track_id'] = best_track_id
+            assigned.append(enriched)
+
+        stale_track_ids = []
+        for track_id, track in _parking_active_tracks.items():
+            if track.get('matched'):
+                continue
+            track['miss_frames'] = int(track.get('miss_frames', 0)) + 1
+            if track['miss_frames'] >= _PARKING_TRACK_MAX_MISS_FRAMES:
+                stale_track_ids.append(track_id)
+
+        for stale_id in stale_track_ids:
+            _parking_active_tracks.pop(stale_id, None)
+            _parking_track_plate_assignments.pop(stale_id, None)
+
+    return assigned
+
+
+def _apply_entry_exit_zone_assignments(detections, frame_width, frame_height):
+    entry_zone = _get_parking_entry_zone()
+    exit_zone = _get_parking_exit_zone()
+
+    entry_polygon = _polygon_from_normalized(entry_zone, frame_width, frame_height)
+    exit_polygon = _polygon_from_normalized(exit_zone, frame_width, frame_height)
+
+    with _parking_track_lock:
+        for det in detections:
+            track_id = det.get('track_id')
+            if track_id is None:
+                continue
+
+            centroid = _detection_centroid(det)
+            inside_entry = len(entry_polygon) >= 3 and _point_in_polygon(centroid, entry_polygon)
+            inside_exit = len(exit_polygon) >= 3 and _point_in_polygon(centroid, exit_polygon)
+
+            assignment = _parking_track_plate_assignments.get(track_id)
+            was_inside_entry = bool(assignment.get('inside_entry')) if assignment else False
+            was_inside_exit = bool(assignment.get('inside_exit')) if assignment else False
+
+            if inside_entry and not was_inside_entry:
+                plate_info = _pop_next_entry_plate()
+                if plate_info:
+                    assignment = assignment or {}
+                    assignment['plate_text'] = plate_info['plate_text']
+                    assignment['plate_type'] = plate_info['plate_type']
+                    assignment['assigned_at'] = time.time()
+                    _parking_track_plate_assignments[track_id] = assignment
+
+            if inside_exit and not was_inside_exit and assignment:
+                assignment.pop('plate_text', None)
+                assignment.pop('plate_type', None)
+                assignment.pop('assigned_at', None)
+
+            assignment = _parking_track_plate_assignments.get(track_id)
+            if assignment is None:
+                assignment = {}
+                _parking_track_plate_assignments[track_id] = assignment
+            assignment['inside_entry'] = inside_entry
+            assignment['inside_exit'] = inside_exit
+
+            if assignment.get('plate_text'):
+                det['plate_text'] = assignment['plate_text']
+
+    return detections
+
+
+def _reset_parking_track_state():
+    global _parking_next_track_id
+    with _parking_track_lock:
+        _parking_active_tracks.clear()
+        _parking_track_plate_assignments.clear()
+        _parking_next_track_id = 1
+
 
 def _get_active_detection_confidence_config():
     config = DetectionConfidenceConfig.objects.filter(is_active=True).order_by('-updated_at').first()
@@ -819,7 +1079,7 @@ def _start_parking_record(slot_id, vehicle_id='', vehicle_type='car'):
         plate_detected=bool(normalized_vehicle),
     )
     logger.info('Parking record started -> %s (%s)', record.session_id, record.slot_id)
-    return record.id
+    return int(record.pk)
 
 
 def _close_parking_record(record_id):
@@ -827,30 +1087,64 @@ def _close_parking_record(record_id):
     return bool(updated)
 
 
+def _update_active_record_vehicle(record_id, vehicle_id):
+    normalized_vehicle = str(vehicle_id or '').strip()[:64]
+    if not normalized_vehicle:
+        return False
+    updated = ParkingRecord.objects.filter(
+        id=record_id,
+        exit_time__isnull=True,
+    ).filter(
+        Q(vehicle_id='') | Q(vehicle_id__isnull=True)
+    ).update(
+        vehicle_id=normalized_vehicle,
+        plate_detected=True,
+    )
+    return bool(updated)
+
+
 def _sync_parking_record_tracker(occupied_slot_info):
     if isinstance(occupied_slot_info, dict):
-        normalized_occupied = {
-            (str(slot_id or '').strip() or 'Unknown')[:64]: _normalize_vehicle_type(vehicle_type)
-            for slot_id, vehicle_type in occupied_slot_info.items()
-        }
+        normalized_occupied = {}
+        for slot_id, slot_data in occupied_slot_info.items():
+            normalized_slot = (str(slot_id or '').strip() or 'Unknown')[:64]
+            if isinstance(slot_data, dict):
+                normalized_occupied[normalized_slot] = {
+                    'vehicle_type': _normalize_vehicle_type(slot_data.get('vehicle_type')),
+                    'vehicle_id': str(slot_data.get('vehicle_id') or '').strip()[:64],
+                }
+            else:
+                normalized_occupied[normalized_slot] = {
+                    'vehicle_type': _normalize_vehicle_type(slot_data),
+                    'vehicle_id': '',
+                }
     else:
         normalized_occupied = {
-            (str(slot_id or '').strip() or 'Unknown')[:64]: ParkingRecord.VEHICLE_TYPE_CAR
+            (str(slot_id or '').strip() or 'Unknown')[:64]: {
+                'vehicle_type': ParkingRecord.VEHICLE_TYPE_CAR,
+                'vehicle_id': '',
+            }
             for slot_id in occupied_slot_info
         }
 
     with _parking_record_tracker_lock:
-        for slot_id, vehicle_type in normalized_occupied.items():
+        for slot_id, slot_data in normalized_occupied.items():
+            vehicle_type = slot_data.get('vehicle_type', ParkingRecord.VEHICLE_TYPE_CAR)
+            vehicle_id = str(slot_data.get('vehicle_id') or '').strip()[:64]
             active = _active_parking_records_by_slot.get(slot_id)
             if active is None:
-                record_id = _start_parking_record(slot_id, vehicle_type=vehicle_type)
+                record_id = _start_parking_record(slot_id, vehicle_id=vehicle_id, vehicle_type=vehicle_type)
                 _active_parking_records_by_slot[slot_id] = {
                     'record_id': record_id,
                     'miss_frames': 0,
+                    'vehicle_id': vehicle_id,
                 }
                 continue
 
             active['miss_frames'] = 0
+            if vehicle_id and not active.get('vehicle_id'):
+                if _update_active_record_vehicle(active['record_id'], vehicle_id):
+                    active['vehicle_id'] = vehicle_id
 
         for slot_id in list(_active_parking_records_by_slot.keys()):
             if slot_id in normalized_occupied:
@@ -1210,6 +1504,9 @@ def _start_server_feed(runtime, request, feed_name):
         if feed_name == 'parking':
             close_stale_open_parking_records()
             flush_active_parking_records()
+            _reset_parking_track_state()
+        if feed_name == 'entry':
+            _reset_entry_plate_queue()
 
         runtime.start(source_type, source_ref, source_label)
         if feed_name == 'parking':
@@ -1228,8 +1525,10 @@ def _remove_server_feed(runtime, request, feed_name):
     if feed_name == 'parking':
         _set_parking_public_feed_state(False, clear_frame=True)
         flush_active_parking_records()
+        _reset_parking_track_state()
     if feed_name == 'entry':
         flush_active_plates()
+        _reset_entry_plate_queue()
     return JsonResponse({'status': 'ok', 'active': False})
 
 
@@ -1384,14 +1683,25 @@ def save_parking_layout(request):
         return JsonResponse({'error': 'Invalid JSON payload'}, status=400)
 
     spaces = payload.get('spaces', [])
-    _set_parking_layout_spaces(spaces)
-    return JsonResponse({'status': 'ok', 'count': len(_get_parking_layout_spaces())})
+    entry_zone = payload.get('entry_zone')
+    exit_zone = payload.get('exit_zone')
+    _set_parking_layout_spaces(spaces, entry_zone=entry_zone, exit_zone=exit_zone)
+    return JsonResponse({
+        'status': 'ok',
+        'count': len(_get_parking_layout_spaces()),
+        'has_entry_zone': bool(_get_parking_entry_zone()),
+        'has_exit_zone': bool(_get_parking_exit_zone()),
+    })
 
 
 def get_parking_layout(request):
     if not request.session.get('user_id'):
         return JsonResponse({'error': 'Unauthorized'}, status=401)
-    return JsonResponse({'spaces': _get_parking_layout_spaces()})
+    return JsonResponse({
+        'spaces': _get_parking_layout_spaces(),
+        'entry_zone': _get_parking_entry_zone(),
+        'exit_zone': _get_parking_exit_zone(),
+    })
 
 
 @require_POST
@@ -2016,12 +2326,16 @@ def system_stats(request):
         fee_info = _calculate_parking_fee_for_record(record)
         total_revenue += fee_info['fee']
 
-        if record.exit_time and period_start_date <= timezone.localtime(record.exit_time).date() < period_end_date:
+        exit_time = record.exit_time
+        if exit_time is None:
+            continue
+
+        if period_start_date <= timezone.localtime(exit_time).date() < period_end_date:
             period_revenue += fee_info['fee']
 
         slot_key = (record.slot_id or '').strip() or 'Unknown'
         slot_stats = slot_duration_totals.setdefault(slot_key, {'total_seconds': 0, 'count': 0})
-        duration_seconds = max(0, int((record.exit_time - record.entry_time).total_seconds()))
+        duration_seconds = max(0, int((exit_time - record.entry_time).total_seconds()))
         slot_stats['total_seconds'] += duration_seconds
         slot_stats['count'] += 1
 

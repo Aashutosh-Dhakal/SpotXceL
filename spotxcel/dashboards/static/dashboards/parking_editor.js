@@ -12,12 +12,15 @@
             this.mode = 'rectangle';
             this.showGrid = true;
             this.spaces = [];
+            this.entryZone = null;
+            this.exitZone = null;
             this.nextId = 1;
             this.selectedId = null;
             this.hoverId = null;
             this.tempPolygon = [];
             this.pointerPoint = null;
             this.rectDraft = null;
+            this.zoneDraft = null;
             this.dragState = null;
             this.undoStack = [];
             this.maxUndo = 10;
@@ -41,6 +44,8 @@
                         <div class="parking-editor-toolbar">
                             <button type="button" class="parking-editor-btn" data-action="rectangle">Rectangle</button>
                             <button type="button" class="parking-editor-btn" data-action="polygon">Polygon</button>
+                            <button type="button" class="parking-editor-btn" data-action="entry-zone">Entry Box</button>
+                            <button type="button" class="parking-editor-btn" data-action="exit-zone">Exit Box</button>
                             <button type="button" class="parking-editor-btn" data-action="select">Select</button>
                             <button type="button" class="parking-editor-btn" data-action="toggle-grid">Grid</button>
                             <button type="button" class="parking-editor-btn" data-action="save">Save Layout</button>
@@ -95,6 +100,7 @@
             if (event.key === 'Escape') {
                 this.tempPolygon = [];
                 this.rectDraft = null;
+                this.zoneDraft = null;
                 this._render();
                 return;
             }
@@ -119,10 +125,17 @@
         }
 
         _handleToolbarAction(action) {
-            if (action === 'rectangle' || action === 'polygon' || action === 'select') {
+            if (
+                action === 'rectangle'
+                || action === 'polygon'
+                || action === 'entry-zone'
+                || action === 'exit-zone'
+                || action === 'select'
+            ) {
                 this.mode = action;
                 this.tempPolygon = [];
                 this.rectDraft = null;
+                this.zoneDraft = null;
                 this._updateModeButtons();
                 this._setCanvasCursorByMode();
                 this._render();
@@ -138,14 +151,20 @@
             if (action === 'clear') {
                 this._pushUndoSnapshot();
                 this.spaces = [];
-                   this.nextId = 1;
+                this.entryZone = null;
+                this.exitZone = null;
+                this.nextId = 1;
                 this.selectedId = null;
                 this._render();
                 return;
             }
 
             if (action === 'save') {
-                localStorage.setItem('parking_layout', JSON.stringify(this.spaces));
+                localStorage.setItem('parking_layout', JSON.stringify({
+                    spaces: this.spaces,
+                    entry_zone: this.entryZone,
+                    exit_zone: this.exitZone,
+                }));
                 return;
             }
 
@@ -155,7 +174,11 @@
             }
 
             if (action === 'start') {
-                this.onStartDetection(this.spaces.map((space) => ({ ...space })));
+                this.onStartDetection({
+                    spaces: this.spaces.map((space) => ({ ...space })),
+                    entryZone: this.entryZone ? { ...this.entryZone, points: [...this.entryZone.points] } : null,
+                    exitZone: this.exitZone ? { ...this.exitZone, points: [...this.exitZone.points] } : null,
+                });
             }
         }
 
@@ -178,16 +201,44 @@
                     return;
                 }
                 const parsed = JSON.parse(raw);
-                if (!Array.isArray(parsed)) {
+
+                let loadedSpaces = [];
+                let loadedEntryZone = null;
+                let loadedExitZone = null;
+
+                if (Array.isArray(parsed)) {
+                    loadedSpaces = parsed;
+                } else if (parsed && typeof parsed === 'object') {
+                    loadedSpaces = Array.isArray(parsed.spaces) ? parsed.spaces : [];
+                    loadedEntryZone = parsed.entry_zone && Array.isArray(parsed.entry_zone.points)
+                        ? {
+                            id: 'ENTRY',
+                            type: 'zone',
+                            zoneType: 'entry',
+                            points: parsed.entry_zone.points,
+                        }
+                        : null;
+                    loadedExitZone = parsed.exit_zone && Array.isArray(parsed.exit_zone.points)
+                        ? {
+                            id: 'EXIT',
+                            type: 'zone',
+                            zoneType: 'exit',
+                            points: parsed.exit_zone.points,
+                        }
+                        : null;
+                } else {
                     return;
                 }
+
                 this._pushUndoSnapshot();
-                this.spaces = parsed.map((space) => ({
+                this.spaces = loadedSpaces.map((space) => ({
                     id: String(space.id),
                     type: space.type === 'polygon' ? 'polygon' : 'rectangle',
                     points: Array.isArray(space.points) ? space.points : [],
                     status: space.status === 'occupied' ? 'occupied' : 'empty',
                 }));
+                this.entryZone = loadedEntryZone;
+                this.exitZone = loadedExitZone;
                 this.nextId = this._calculateNextId();
                 this.selectedId = null;
                 this._render();
@@ -262,6 +313,11 @@
                 return;
             }
 
+            if (this.mode === 'entry-zone' || this.mode === 'exit-zone') {
+                this.zoneDraft = { start: p, end: p, zoneType: this.mode === 'entry-zone' ? 'entry' : 'exit' };
+                return;
+            }
+
             if (this.mode !== 'select') {
                 return;
             }
@@ -298,6 +354,12 @@
 
             if (this.mode === 'rectangle' && this.rectDraft) {
                 this.rectDraft.end = p;
+                this._render();
+                return;
+            }
+
+            if ((this.mode === 'entry-zone' || this.mode === 'exit-zone') && this.zoneDraft) {
+                this.zoneDraft.end = p;
                 this._render();
                 return;
             }
@@ -373,6 +435,37 @@
                     this.nextId += 1;
                 }
                 this.rectDraft = null;
+                this._render();
+            }
+
+            if ((this.mode === 'entry-zone' || this.mode === 'exit-zone') && this.zoneDraft) {
+                const { start, end, zoneType } = this.zoneDraft;
+                const width = Math.abs(end.x - start.x);
+                const height = Math.abs(end.y - start.y);
+                if (width > 4 && height > 4) {
+                    this._pushUndoSnapshot();
+                    const x1 = Math.min(start.x, end.x);
+                    const y1 = Math.min(start.y, end.y);
+                    const x2 = Math.max(start.x, end.x);
+                    const y2 = Math.max(start.y, end.y);
+                    const zone = {
+                        id: zoneType === 'entry' ? 'ENTRY' : 'EXIT',
+                        type: 'zone',
+                        zoneType,
+                        points: [
+                            this._toNormalized({ x: x1, y: y1 }),
+                            this._toNormalized({ x: x2, y: y1 }),
+                            this._toNormalized({ x: x2, y: y2 }),
+                            this._toNormalized({ x: x1, y: y2 }),
+                        ],
+                    };
+                    if (zoneType === 'entry') {
+                        this.entryZone = zone;
+                    } else {
+                        this.exitZone = zone;
+                    }
+                }
+                this.zoneDraft = null;
                 this._render();
             }
 
@@ -597,6 +690,35 @@
             }
         }
 
+        _drawZone(zone, style) {
+            if (!zone || !Array.isArray(zone.points) || zone.points.length < 3) {
+                return;
+            }
+
+            const points = zone.points.map((n) => this._fromNormalized(n));
+            this.ctx.save();
+            this.ctx.beginPath();
+            this.ctx.moveTo(points[0][0], points[0][1]);
+            for (let i = 1; i < points.length; i += 1) {
+                this.ctx.lineTo(points[i][0], points[i][1]);
+            }
+            this.ctx.closePath();
+            this.ctx.fillStyle = style.fill;
+            this.ctx.strokeStyle = style.stroke;
+            this.ctx.lineWidth = style.lineWidth || 2;
+            this.ctx.setLineDash([8, 6]);
+            this.ctx.lineDashOffset = -(Date.now() / 60);
+            this.ctx.fill();
+            this.ctx.stroke();
+
+            const label = zone.zoneType === 'entry' ? 'ENTRY ZONE' : 'EXIT ZONE';
+            this.ctx.setLineDash([]);
+            this.ctx.fillStyle = '#ffffff';
+            this.ctx.font = 'bold 13px Arial';
+            this.ctx.fillText(label, points[0][0] + 6, points[0][1] > 18 ? points[0][1] - 6 : points[0][1] + 16);
+            this.ctx.restore();
+        }
+
         _render() {
             if (this.isDestroyed) {
                 return;
@@ -612,6 +734,18 @@
                     stroke: isHovered ? '#3b82f6' : '#00ff64',
                     lineWidth: isHovered ? 3 : 2,
                 });
+            });
+
+            this._drawZone(this.entryZone, {
+                fill: 'rgba(245, 158, 11, 0.22)',
+                stroke: '#f59e0b',
+                lineWidth: 2,
+            });
+
+            this._drawZone(this.exitZone, {
+                fill: 'rgba(239, 68, 68, 0.22)',
+                stroke: '#ef4444',
+                lineWidth: 2,
             });
 
             if (this.rectDraft) {
@@ -657,6 +791,24 @@
                     this.ctx.fill();
                 });
                 this.ctx.restore();
+            }
+
+            if (this.zoneDraft) {
+                const { start, end, zoneType } = this.zoneDraft;
+                const draftZone = {
+                    zoneType,
+                    points: [
+                        this._toNormalized({ x: start.x, y: start.y }),
+                        this._toNormalized({ x: end.x, y: start.y }),
+                        this._toNormalized({ x: end.x, y: end.y }),
+                        this._toNormalized({ x: start.x, y: end.y }),
+                    ],
+                };
+                this._drawZone(draftZone, {
+                    fill: zoneType === 'entry' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                    stroke: zoneType === 'entry' ? '#f59e0b' : '#ef4444',
+                    lineWidth: 2,
+                });
             }
 
         }

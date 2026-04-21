@@ -15,14 +15,58 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     const deleteAccountForm = document.getElementById('delete-account-form');
-    if (deleteAccountForm) {
-        deleteAccountForm.addEventListener('submit', function(e) {
-            const confirmed = window.confirm('Are you sure you want to delete your account? This action is permanent and cannot be undone.');
-            if (!confirmed) {
-                e.preventDefault();
+    const deleteAccountBtn = document.getElementById('delete-account-btn');
+    const deleteAccountModal = document.getElementById('deleteAccountModal');
+    const closeDeleteAccountModalBtn = document.getElementById('closeDeleteAccountModalBtn');
+    const cancelDeleteAccountBtn = document.getElementById('cancelDeleteAccountBtn');
+    const confirmDeleteAccountBtn = document.getElementById('confirmDeleteAccountBtn');
+
+    function openDeleteAccountModal() {
+        if (deleteAccountModal) {
+            deleteAccountModal.classList.add('show');
+        }
+    }
+
+    function closeDeleteAccountModal() {
+        if (deleteAccountModal) {
+            deleteAccountModal.classList.remove('show');
+        }
+    }
+
+    if (deleteAccountBtn) {
+        deleteAccountBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            openDeleteAccountModal();
+        });
+    }
+
+    if (closeDeleteAccountModalBtn) {
+        closeDeleteAccountModalBtn.addEventListener('click', closeDeleteAccountModal);
+    }
+
+    if (cancelDeleteAccountBtn) {
+        cancelDeleteAccountBtn.addEventListener('click', closeDeleteAccountModal);
+    }
+
+    if (confirmDeleteAccountBtn && deleteAccountForm) {
+        confirmDeleteAccountBtn.addEventListener('click', function() {
+            deleteAccountForm.submit();
+        });
+    }
+
+    if (deleteAccountModal) {
+        deleteAccountModal.addEventListener('click', function(e) {
+            if (e.target === deleteAccountModal) {
+                closeDeleteAccountModal();
             }
         });
     }
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeDeleteAccountModal();
+        }
+    });
 });
 
 // Show alert message

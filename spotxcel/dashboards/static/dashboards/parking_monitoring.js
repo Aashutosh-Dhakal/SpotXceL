@@ -66,6 +66,8 @@
 
     let parkingEditorInstance = null;
     let parkingSpaces = [];
+    let parkingEntryZone = null;
+    let parkingExitZone = null;
     let parkingOverlayActive = false;
     let parkingLastFrameBitmap = null;
     let parkingEditorPendingStart = false;
@@ -360,13 +362,29 @@
             cache: 'no-store',
         });
         if (!response.ok) {
-            return [];
+            return { spaces: [], entryZone: null, exitZone: null };
         }
         const payload = await response.json().catch(() => ({}));
-        return Array.isArray(payload.spaces) ? payload.spaces : [];
+        return {
+            spaces: Array.isArray(payload.spaces) ? payload.spaces : [],
+            entryZone: payload.entry_zone && Array.isArray(payload.entry_zone.points)
+                ? payload.entry_zone
+                : null,
+            exitZone: payload.exit_zone && Array.isArray(payload.exit_zone.points)
+                ? payload.exit_zone
+                : null,
+        };
     }
 
-    async function saveParkingLayoutToServer(spaces) {
+    async function saveParkingLayoutToServer(layout) {
+        const spaces = Array.isArray(layout && layout.spaces) ? layout.spaces : [];
+        const entryZone = layout && layout.entryZone && Array.isArray(layout.entryZone.points)
+            ? layout.entryZone
+            : null;
+        const exitZone = layout && layout.exitZone && Array.isArray(layout.exitZone.points)
+            ? layout.exitZone
+            : null;
+
         try {
             await fetch(API.parkingLayoutSave, {
                 method: 'POST',
@@ -375,7 +393,11 @@
                     'Content-Type': 'application/json',
                     'X-CSRFToken': getCSRFToken(),
                 },
-                body: JSON.stringify({ spaces }),
+                body: JSON.stringify({
+                    spaces,
+                    entry_zone: entryZone,
+                    exit_zone: exitZone,
+                }),
             });
         } catch (error) {
             console.error('Failed to save parking layout to server:', error);
@@ -730,10 +752,21 @@
         openParkingEditorModal();
 
         parkingEditorInstance = window.initParkingEditor(firstFrame, host, {
-            onStartDetection: async (spaces) => {
-                parkingSpaces = Array.isArray(spaces) ? spaces : [];
+            onStartDetection: async (layout) => {
+                const resolvedLayout = layout && typeof layout === 'object' ? layout : {};
+                parkingSpaces = Array.isArray(resolvedLayout.spaces) ? resolvedLayout.spaces : [];
+                parkingEntryZone = resolvedLayout.entryZone && Array.isArray(resolvedLayout.entryZone.points)
+                    ? resolvedLayout.entryZone
+                    : null;
+                parkingExitZone = resolvedLayout.exitZone && Array.isArray(resolvedLayout.exitZone.points)
+                    ? resolvedLayout.exitZone
+                    : null;
                 setParkingStats(parkingSpaces.length, 0, parkingSpaces.length);
-                saveParkingLayoutToServer(parkingSpaces);
+                saveParkingLayoutToServer({
+                    spaces: parkingSpaces,
+                    entryZone: parkingEntryZone,
+                    exitZone: parkingExitZone,
+                });
                 if (parkingEditorInstance) {
                     parkingEditorInstance.destroy();
                     parkingEditorInstance = null;
@@ -798,7 +831,10 @@
                 if (status.active) {
                     setFeedUiActive(feedType, true);
                     if (feedType === 'parking') {
-                        parkingSpaces = await requestParkingLayout();
+                        const layout = await requestParkingLayout();
+                        parkingSpaces = Array.isArray(layout.spaces) ? layout.spaces : [];
+                        parkingEntryZone = layout.entryZone;
+                        parkingExitZone = layout.exitZone;
                         setParkingStats(parkingSpaces.length, 0, parkingSpaces.length);
                     }
                     startFeedPolling(feedType);
