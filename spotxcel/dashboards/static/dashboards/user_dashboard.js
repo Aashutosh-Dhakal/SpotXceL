@@ -100,6 +100,7 @@
         const endEl = document.getElementById('tracked-end-time');
         const durationEl = document.getElementById('tracked-duration');
         const sessionEl = document.getElementById('tracked-session-id');
+        const vehicleEl = document.getElementById('tracked-vehicle-id');
 
         if (slotChip) {
             slotChip.textContent = slotId || '-';
@@ -118,6 +119,9 @@
         }
         if (sessionEl) {
             sessionEl.textContent = '-';
+        }
+        if (vehicleEl) {
+            vehicleEl.textContent = '-';
         }
 
         selectedSlotStatus = '';
@@ -285,6 +289,7 @@
         const endEl = document.getElementById('tracked-end-time');
         const durationEl = document.getElementById('tracked-duration');
         const sessionEl = document.getElementById('tracked-session-id');
+        const vehicleEl = document.getElementById('tracked-vehicle-id');
 
         if (slotChip) {
             slotChip.textContent = payload.slot_id || '-';
@@ -303,6 +308,9 @@
         }
         if (sessionEl) {
             sessionEl.textContent = payload.session_id || '-';
+        }
+        if (vehicleEl) {
+            vehicleEl.textContent = payload.vehicle_id || '-';
         }
 
         selectedSlotStatus = payload.status || '';

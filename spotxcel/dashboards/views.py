@@ -187,7 +187,7 @@ def _annotate_entry_frame(frame):
             })
 
             if text:
-                _queue_entry_plate(text, plate_type)
+                pass
 
             meta_detections.append({
                 'x1': x1,
@@ -873,11 +873,6 @@ _parking_record_tracker_lock = Lock()
 _active_parking_records_by_slot = {}
 _PARKING_EXIT_MISS_FRAMES = 10
 
-_entry_plate_queue_lock = Lock()
-_entry_plate_queue = []
-_entry_plate_last_seen = {}
-_ENTRY_PLATE_QUEUE_LIMIT = 25
-_ENTRY_PLATE_DEDUP_SECONDS = 6.0
 
 _parking_track_lock = Lock()
 _parking_next_track_id = 1
@@ -887,38 +882,22 @@ _PARKING_TRACK_MAX_MISS_FRAMES = 15
 _PARKING_TRACK_MATCH_DISTANCE_PX = 90.0
 
 
-def _queue_entry_plate(plate_text, plate_type):
-    normalized_text = str(plate_text or '').strip().upper()
-    if not normalized_text:
-        return
-
-    now_ts = time.time()
-    with _entry_plate_queue_lock:
-        last_seen = _entry_plate_last_seen.get(normalized_text, 0.0)
-        if now_ts - last_seen < _ENTRY_PLATE_DEDUP_SECONDS:
-            return
-
-        _entry_plate_last_seen[normalized_text] = now_ts
-        _entry_plate_queue.append({
-            'plate_text': normalized_text,
-            'plate_type': _normalize_plate_type(plate_type),
-            'queued_at': now_ts,
-        })
-        if len(_entry_plate_queue) > _ENTRY_PLATE_QUEUE_LIMIT:
-            _entry_plate_queue[:] = _entry_plate_queue[-_ENTRY_PLATE_QUEUE_LIMIT:]
-
-
-def _pop_next_entry_plate():
-    with _entry_plate_queue_lock:
-        if not _entry_plate_queue:
+def _mark_current_best_plate_for_saving():
+    with _tracker_lock:
+        if not _active_plates:
             return None
-        return _entry_plate_queue.pop(0)
-
-
-def _reset_entry_plate_queue():
-    with _entry_plate_queue_lock:
-        _entry_plate_queue.clear()
-        _entry_plate_last_seen.clear()
+        
+        # Only consider plates that have actually been recognized
+        valid_plates = [p for p in _active_plates if p.get('best_text')]
+        if not valid_plates:
+            return None
+            
+        best_plate = max(valid_plates, key=lambda x: (x.get('frame_count', 0), x.get('best_conf', 0.0)))
+        best_plate['should_save'] = True
+        return {
+            'plate_text': best_plate['best_text'],
+            'plate_type': best_plate.get('plate_type', 'unknown'),
+        }
 
 
 def _assign_track_ids_to_detections(detections):
@@ -997,27 +976,25 @@ def _apply_entry_exit_zone_assignments(detections, frame_width, frame_height):
             inside_exit = len(exit_polygon) >= 3 and _point_in_polygon(centroid, exit_polygon)
 
             assignment = _parking_track_plate_assignments.get(track_id)
-            was_inside_entry = bool(assignment.get('inside_entry')) if assignment else False
-            was_inside_exit = bool(assignment.get('inside_exit')) if assignment else False
+            if assignment is None:
+                assignment = {}
+                _parking_track_plate_assignments[track_id] = assignment
 
-            if inside_entry and not was_inside_entry:
-                plate_info = _pop_next_entry_plate()
+            was_inside_entry = bool(assignment.get('inside_entry'))
+            was_inside_exit = bool(assignment.get('inside_exit'))
+
+            if inside_entry and not assignment.get('plate_text'):
+                plate_info = _mark_current_best_plate_for_saving()
                 if plate_info:
-                    assignment = assignment or {}
                     assignment['plate_text'] = plate_info['plate_text']
                     assignment['plate_type'] = plate_info['plate_type']
                     assignment['assigned_at'] = time.time()
-                    _parking_track_plate_assignments[track_id] = assignment
 
-            if inside_exit and not was_inside_exit and assignment:
+            if inside_exit and not was_inside_exit:
                 assignment.pop('plate_text', None)
                 assignment.pop('plate_type', None)
                 assignment.pop('assigned_at', None)
 
-            assignment = _parking_track_plate_assignments.get(track_id)
-            if assignment is None:
-                assignment = {}
-                _parking_track_plate_assignments[track_id] = assignment
             assignment['inside_entry'] = inside_entry
             assignment['inside_exit'] = inside_exit
 
@@ -1378,8 +1355,8 @@ def _update_tracker(current_detections: list[dict]):
             elif now - ap['last_seen'] < _EXIT_TIMEOUT_S:
                 remaining.append(ap)
             else:
-                # Plate has left - write to DB if we got text and more than 1 frame.
-                if ap['best_text'] and ap['frame_count'] > 1:
+                # Plate has left - write to DB if we got text, more than 1 frame, and it was assigned to a vehicle.
+                if ap['best_text'] and ap['frame_count'] > 1 and ap.get('should_save'):
                     _save_plate_to_db(ap)
 
         # --- register new detections ---
@@ -1404,7 +1381,7 @@ def flush_active_plates():
     """Flush all remaining active plates to DB (e.g. when the feed stops)."""
     with _tracker_lock:
         for ap in _active_plates:
-            if ap['best_text'] and ap['frame_count'] > 1:
+            if ap['best_text'] and ap['frame_count'] > 1 and ap.get('should_save'):
                 _save_plate_to_db(ap)
         _active_plates.clear()
 
@@ -1506,7 +1483,7 @@ def _start_server_feed(runtime, request, feed_name):
             flush_active_parking_records()
             _reset_parking_track_state()
         if feed_name == 'entry':
-            _reset_entry_plate_queue()
+            pass
 
         runtime.start(source_type, source_ref, source_label)
         if feed_name == 'parking':
@@ -1528,7 +1505,7 @@ def _remove_server_feed(runtime, request, feed_name):
         _reset_parking_track_state()
     if feed_name == 'entry':
         flush_active_plates()
-        _reset_entry_plate_queue()
+        pass
     return JsonResponse({'status': 'ok', 'active': False})
 
 
