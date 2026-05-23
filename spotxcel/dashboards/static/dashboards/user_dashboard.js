@@ -20,6 +20,7 @@
     let parkingFeedActive = false;
     let lastLayoutRefreshAt = 0;
     let lastLayoutSlotIds = [];
+    let lastPopupPayload = null;
 
     function getLayoutSlotIds() {
         if (!Array.isArray(slotLayoutSpaces)) {
@@ -291,6 +292,19 @@
         const sessionEl = document.getElementById('tracked-session-id');
         const vehicleEl = document.getElementById('tracked-vehicle-id');
 
+        if (payload.status === 'Completed' || payload.status === 'No Records') {
+            if (slotChip) slotChip.textContent = payload.slot_id || '-';
+            if (statusEl) statusEl.textContent = 'Empty';
+            if (startEl) startEl.textContent = '-';
+            if (endEl) endEl.textContent = '-';
+            if (durationEl) durationEl.textContent = '-';
+            if (sessionEl) sessionEl.textContent = '-';
+            if (vehicleEl) vehicleEl.textContent = '-';
+            selectedSlotStatus = payload.status || '';
+            renderSlotHighlightOverlay();
+            return;
+        }
+
         if (slotChip) {
             slotChip.textContent = payload.slot_id || '-';
         }
@@ -316,6 +330,36 @@
         selectedSlotStatus = payload.status || '';
         renderSlotHighlightOverlay();
     }
+
+    function showSessionEndedPopup(payload) {
+        lastPopupPayload = payload;
+        
+        const slotEl = document.getElementById('popup-slot-id');
+        const startEl = document.getElementById('popup-start-time');
+        const endEl = document.getElementById('popup-end-time');
+        const durationEl = document.getElementById('popup-duration');
+        const sessionEl = document.getElementById('popup-session-id');
+        const vehicleEl = document.getElementById('popup-vehicle-id');
+
+        if (slotEl) slotEl.textContent = payload.slot_id || '-';
+        if (startEl) startEl.textContent = formatDateTime(payload.start_time);
+        if (endEl) endEl.textContent = formatDateTime(payload.end_time);
+        if (durationEl) durationEl.textContent = payload.duration || '-';
+        if (sessionEl) sessionEl.textContent = payload.session_id || '-';
+        if (vehicleEl) vehicleEl.textContent = payload.vehicle_id || '-';
+
+        const modal = document.getElementById('sessionEndedModal');
+        if (modal) {
+            modal.classList.add('show');
+        }
+    }
+    
+    window.closeSessionEndedModal = function() {
+        const modal = document.getElementById('sessionEndedModal');
+        if (modal) {
+            modal.classList.remove('show');
+        }
+    };
 
     async function fetchSelectedSlotStatus() {
         if (!selectedSlotId) {
@@ -343,6 +387,9 @@
         try {
             const payload = await fetchSelectedSlotStatus();
             if (payload) {
+                if (selectedSlotStatus === 'In Progress' && payload.status === 'Completed') {
+                    showSessionEndedPopup(payload);
+                }
                 updateSlotTrackingUi(payload);
             }
         } catch (error) {
@@ -555,6 +602,35 @@
     }
 
     document.addEventListener('DOMContentLoaded', function () {
+        const downloadBtn = document.getElementById('downloadSessionBtn');
+        if (downloadBtn) {
+            downloadBtn.addEventListener('click', function() {
+                if (!lastPopupPayload) return;
+                
+                let csvContent = "data:text/csv;charset=utf-8,";
+                csvContent += "Slot,Start Time,End Time,Duration,Session ID,License Plate\n";
+                
+                const row = [
+                    lastPopupPayload.slot_id || '-',
+                    formatDateTime(lastPopupPayload.start_time),
+                    formatDateTime(lastPopupPayload.end_time),
+                    lastPopupPayload.duration || '-',
+                    lastPopupPayload.session_id || '-',
+                    lastPopupPayload.vehicle_id || '-'
+                ];
+                
+                csvContent += row.map(val => `"${val}"`).join(",") + "\n";
+                
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", `session_${lastPopupPayload.session_id || 'ended'}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            });
+        }
+
         syncSlotSelectorToLayout();
         refreshParkingLayout();
         lastLayoutSlotIds = getLayoutSlotIds();

@@ -384,29 +384,18 @@ def profile(request):
     if request.method == 'POST':
         # Get form data
         fullname = request.POST.get('fullname', '').strip()
-        email = request.POST.get('email', '').strip()
         current_password = request.POST.get('current_password', '')
         new_password = request.POST.get('new_password', '')
         
         # Validate required fields
-        if not fullname or not email:
-            messages.error(request, 'Full name and email are required.')
+        if not fullname:
+            messages.error(request, 'Full name is required.')
             return render(request, 'accounts/profile.html', {'user': user})
         
         # Username validation (same as signup)
         if not all(c.islower() or c.isdigit() or c in '_- ' for c in fullname):
             # Allow spaces in full name but keep lowercase, numbers, underscore, hyphen
             pass  # We'll be more lenient with full names
-        
-        # Email validation
-        if '@' not in email or '.' not in email:
-            messages.error(request, 'Please enter a valid email address.')
-            return render(request, 'accounts/profile.html', {'user': user})
-        
-        # Check if email already exists (excluding current user)
-        if email != user.email and User.objects.filter(email=email).exists():
-            messages.error(request, 'Email already registered. Please use another email.')
-            return render(request, 'accounts/profile.html', {'user': user})
         
         # Handle password change
         password_changed = False
@@ -438,11 +427,6 @@ def profile(request):
         if user.username != fullname:
             user.username = fullname
             request.session['username'] = fullname
-            changes_made = True
-        
-        if user.email != email:
-            user.email = email
-            request.session['email'] = email
             changes_made = True
         
         if password_changed:

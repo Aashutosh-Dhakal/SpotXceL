@@ -109,18 +109,15 @@ document.addEventListener('DOMContentLoaded', function() {
     
     form.addEventListener('submit', function(e) {
         const usernameInput = document.getElementById('fullname');
-        const emailInput = document.getElementById('email');
         const currentPasswordInput = document.getElementById('current_password');
         const newPasswordInput = document.getElementById('new_password');
         
         const username = usernameInput.value.trim();
-        const email = emailInput.value.trim();
         const currentPassword = currentPasswordInput.value;
         const newPassword = newPasswordInput.value;
         
         // Reset visual states
         usernameInput.classList.remove('input-error', 'input-success');
-        emailInput.classList.remove('input-error', 'input-success');
         currentPasswordInput.classList.remove('input-error', 'input-success');
         newPasswordInput.classList.remove('input-error', 'input-success');
         
@@ -148,15 +145,6 @@ document.addEventListener('DOMContentLoaded', function() {
             showAlert('Username must start with a letter and can only contain letters (first letter can be uppercase), numbers, underscore, and hyphen.');
             usernameInput.classList.add('input-error');
             usernameInput.focus();
-            return false;
-        }
-        
-        // Email validation
-        if (!email || !email.includes('@')) {
-            e.preventDefault();
-            showAlert('Please enter a valid email address.');
-            emailInput.classList.add('input-error');
-            emailInput.focus();
             return false;
         }
         

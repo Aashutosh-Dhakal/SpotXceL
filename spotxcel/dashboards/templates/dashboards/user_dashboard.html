@@ -148,6 +148,54 @@
             </div>
         </div>
     </div>
+
+        <!-- Session Ended Modal -->
+        <div class="modal" id="sessionEndedModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>
+                        <i class="fas fa-flag-checkered"></i>
+                        Session Ended
+                    </h3>
+                    <button class="modal-close" onclick="closeSessionEndedModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p style="color: #6B7280; font-size: 0.875rem; margin-bottom: 15px;">The vehicle has exited the parking slot. Here are the final session details:</p>
+                    <div class="vehicle-details" style="background: #FAFAFA; border: 1px solid #E5E7EB; padding: 15px; border-radius: 4px;">
+                        <div class="detail-row">
+                            <span class="detail-label">Slot</span>
+                            <span class="detail-value" id="popup-slot-id">-</span>
+                        </div>
+                        <div class="detail-row" style="margin-top: 8px;">
+                            <span class="detail-label">Start Time</span>
+                            <span class="detail-value" id="popup-start-time">-</span>
+                        </div>
+                        <div class="detail-row" style="margin-top: 8px;">
+                            <span class="detail-label">End Time</span>
+                            <span class="detail-value" id="popup-end-time">-</span>
+                        </div>
+                        <div class="detail-row" style="margin-top: 8px;">
+                            <span class="detail-label">Duration</span>
+                            <span class="detail-value" id="popup-duration">-</span>
+                        </div>
+                        <div class="detail-row" style="margin-top: 8px;">
+                            <span class="detail-label">Session ID</span>
+                            <span class="detail-value" id="popup-session-id" style="font-family: monospace; font-size: 0.75rem;">-</span>
+                        </div>
+                        <div class="detail-row" style="margin-top: 8px;">
+                            <span class="detail-label">License Plate</span>
+                            <span class="detail-value" id="popup-vehicle-id" style="background: #F3F4F6; padding: 2px 6px; border-radius: 2px; font-family: monospace;">-</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer" style="display: flex; gap: 10px; padding: 16px 24px; border-top: 1px solid #E5E7EB; background: #FAFAFA; justify-content: flex-end;">
+                    <button class="btn-cancel-modal" onclick="closeSessionEndedModal()" style="padding: 8px 20px; border-radius: 3px; font-size: 0.8125rem; font-weight: 600; cursor: pointer; border: 1px solid #D1D5DB; background: #fff; color: #6B7280;">Close</button>
+                    <button class="btn-confirm-yes" id="downloadSessionBtn" style="padding: 8px 20px; border-radius: 3px; font-size: 0.8125rem; font-weight: 600; cursor: pointer; border: none; background: #EA580C; color: #fff;">
+                        <i class="fas fa-download"></i> Download Data
+                    </button>
+                </div>
+            </div>
+        </div>
 {% endblock %}
 
 {% block extra_js %}
