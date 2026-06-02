@@ -6,11 +6,65 @@ let originalFormValues = {};
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.querySelector('.profile-form');
     const inputs = form.querySelectorAll('input');
-    
+
     // Store original values
     inputs.forEach(input => {
         if (input.type !== 'password') {
             originalFormValues[input.id || input.name] = input.value;
+        }
+    });
+
+    const deleteAccountForm = document.getElementById('delete-account-form');
+    const deleteAccountBtn = document.getElementById('delete-account-btn');
+    const deleteAccountModal = document.getElementById('deleteAccountModal');
+    const closeDeleteAccountModalBtn = document.getElementById('closeDeleteAccountModalBtn');
+    const cancelDeleteAccountBtn = document.getElementById('cancelDeleteAccountBtn');
+    const confirmDeleteAccountBtn = document.getElementById('confirmDeleteAccountBtn');
+
+    function openDeleteAccountModal() {
+        if (deleteAccountModal) {
+            deleteAccountModal.classList.add('show');
+        }
+    }
+
+    function closeDeleteAccountModal() {
+        if (deleteAccountModal) {
+            deleteAccountModal.classList.remove('show');
+        }
+    }
+
+    if (deleteAccountBtn) {
+        deleteAccountBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            openDeleteAccountModal();
+        });
+    }
+
+    if (closeDeleteAccountModalBtn) {
+        closeDeleteAccountModalBtn.addEventListener('click', closeDeleteAccountModal);
+    }
+
+    if (cancelDeleteAccountBtn) {
+        cancelDeleteAccountBtn.addEventListener('click', closeDeleteAccountModal);
+    }
+
+    if (confirmDeleteAccountBtn && deleteAccountForm) {
+        confirmDeleteAccountBtn.addEventListener('click', function() {
+            deleteAccountForm.submit();
+        });
+    }
+
+    if (deleteAccountModal) {
+        deleteAccountModal.addEventListener('click', function(e) {
+            if (e.target === deleteAccountModal) {
+                closeDeleteAccountModal();
+            }
+        });
+    }
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeDeleteAccountModal();
         }
     });
 });
@@ -55,18 +109,15 @@ document.addEventListener('DOMContentLoaded', function() {
     
     form.addEventListener('submit', function(e) {
         const usernameInput = document.getElementById('fullname');
-        const emailInput = document.getElementById('email');
         const currentPasswordInput = document.getElementById('current_password');
         const newPasswordInput = document.getElementById('new_password');
         
         const username = usernameInput.value.trim();
-        const email = emailInput.value.trim();
         const currentPassword = currentPasswordInput.value;
         const newPassword = newPasswordInput.value;
         
         // Reset visual states
         usernameInput.classList.remove('input-error', 'input-success');
-        emailInput.classList.remove('input-error', 'input-success');
         currentPasswordInput.classList.remove('input-error', 'input-success');
         newPasswordInput.classList.remove('input-error', 'input-success');
         
@@ -94,15 +145,6 @@ document.addEventListener('DOMContentLoaded', function() {
             showAlert('Username must start with a letter and can only contain letters (first letter can be uppercase), numbers, underscore, and hyphen.');
             usernameInput.classList.add('input-error');
             usernameInput.focus();
-            return false;
-        }
-        
-        // Email validation
-        if (!email || !email.includes('@')) {
-            e.preventDefault();
-            showAlert('Please enter a valid email address.');
-            emailInput.classList.add('input-error');
-            emailInput.focus();
             return false;
         }
         
@@ -153,41 +195,47 @@ function resetForm() {
     }
 }
 
-// Add Vehicle Button
-document.getElementById('addVehicleBtn').addEventListener('click', function() {
-    const vehiclesList = document.getElementById('vehiclesList');
-    
-    // Create new vehicle item
-    const vehicleItem = document.createElement('div');
-    vehicleItem.className = 'vehicle-item';
-    vehicleItem.innerHTML = `
-        <div class="vehicle-field">
-            <label>Vehicle Type</label>
-            <div class="input-with-icon">
-                <i class="fas fa-car"></i>
-                <select name="vehicle_type[]">
-                    <option selected>Passenger Car</option>
-                    <option>Motorcycle</option>
-                    <option>SUV / Van</option>
-                    <option>Truck</option>
-                </select>
+// Add Vehicle Button (optional; section may be hidden/removed)
+const addVehicleBtn = document.getElementById('addVehicleBtn');
+if (addVehicleBtn) {
+    addVehicleBtn.addEventListener('click', function() {
+        const vehiclesList = document.getElementById('vehiclesList');
+        if (!vehiclesList) {
+            return;
+        }
+
+        // Create new vehicle item
+        const vehicleItem = document.createElement('div');
+        vehicleItem.className = 'vehicle-item';
+        vehicleItem.innerHTML = `
+            <div class="vehicle-field">
+                <label>Vehicle Type</label>
+                <div class="input-with-icon">
+                    <i class="fas fa-car"></i>
+                    <select name="vehicle_type[]">
+                        <option selected>Passenger Car</option>
+                        <option>Motorcycle</option>
+                        <option>SUV / Van</option>
+                        <option>Truck</option>
+                    </select>
+                </div>
             </div>
-        </div>
-        <div class="vehicle-field">
-            <label>Number Plate</label>
-            <div class="input-with-icon">
-                <i class="fas fa-hashtag"></i>
-                <input type="text" name="number_plate[]" placeholder="ABC-123" class="plate-input">
+            <div class="vehicle-field">
+                <label>Number Plate</label>
+                <div class="input-with-icon">
+                    <i class="fas fa-hashtag"></i>
+                    <input type="text" name="number_plate[]" placeholder="ABC-123" class="plate-input">
+                </div>
             </div>
-        </div>
-        <button type="button" class="btn-remove-vehicle" onclick="removeVehicle(this)">
-            <i class="fas fa-trash"></i>
-            <span class="btn-text">Remove</span>
-        </button>
-    `;
-    
-    vehiclesList.appendChild(vehicleItem);
-});
+            <button type="button" class="btn-remove-vehicle" onclick="removeVehicle(this)">
+                <i class="fas fa-trash"></i>
+                <span class="btn-text">Remove</span>
+            </button>
+        `;
+
+        vehiclesList.appendChild(vehicleItem);
+    });
+}
 
 // Remove Vehicle Function
 function removeVehicle(button) {

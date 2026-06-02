@@ -58,7 +58,7 @@
                 <div class="form-group">
                     <div class="label-row">
                         <label for="password">Password</label>
-                        <a href="#" class="forgot-link">Forgot password?</a>
+                        <a href="{% url 'forgot_password' %}" class="forgot-link">Forgot password?</a>
                     </div>
                     <div class="input-wrapper">
                         <i class="fas fa-lock input-icon"></i>
@@ -85,17 +85,4 @@
 
 {% block extra_js %}
 <script src="{% static 'accounts/login.js' %}"></script>
-<script>
-    // Auto-close server-side alert messages after 5 seconds
-    document.addEventListener('DOMContentLoaded', function() {
-        const serverAlerts = document.querySelectorAll('.alert-card');
-        serverAlerts.forEach(alert => {
-            if (alert.id !== 'alert-card') { // Skip the template alert
-                setTimeout(() => {
-                    alert.style.display = 'none';
-                }, 5000);
-            }
-        });
-    });
-</script>
 {% endblock %}

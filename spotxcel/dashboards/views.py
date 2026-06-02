@@ -1,19 +1,25 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from django.db.models import Q
+from django.db import transaction
+from django.db.models import Q, Count, Avg
+from django.db.models.functions import TruncDate, ExtractHour, ExtractMonth
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_POST
 from django.conf import settings
 from django.utils import timezone
+from django.core.paginator import Paginator
 from pathlib import Path
 from threading import Lock
 from threading import Thread, Event
-from datetime import datetime
+from datetime import datetime, timedelta, date
+from decimal import Decimal
+import math
 import json
 import logging
 import os
 import time
 import uuid
+from json import JSONDecodeError
 
 import cv2
 import numpy as np
@@ -21,7 +27,7 @@ from ultralytics import YOLO
 
 from accounts.models import User
 from dashboards.ocr import recognise_plate
-from dashboards.models import PlateDetectionHistory
+from dashboards.models import DetectionConfidenceConfig, ParkingFeeConfig, ParkingRecord, PlateDetectionHistory
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +44,39 @@ def _check_verified(request):
     except User.DoesNotExist:
         return redirect('login')
     return None
+
+
+def _get_session_user(request):
+    """Return the current session user from the database, or None."""
+    user_id = request.session.get('user_id')
+    if not user_id:
+        return None
+
+    try:
+        return User.objects.only('user_id', 'role', 'verified_status').get(user_id=user_id)
+    except User.DoesNotExist:
+        return None
+
+
+def _render_access_denied(request, required_role):
+    """Render a dedicated role-based access denied page."""
+    required_role = (required_role or '').strip().lower()
+    if required_role == 'admin':
+        denied_message = 'This page is restricted to admin accounts only.'
+    elif required_role == 'driver':
+        denied_message = 'This page is restricted to driver accounts only.'
+    else:
+        denied_message = 'You do not have permission to view this page.'
+
+    return render(
+        request,
+        'core/access_denied.html',
+        {
+            'required_role': required_role,
+            'denied_message': denied_message,
+        },
+        status=403,
+    )
 
 
 MODEL_PATH = Path(settings.BASE_DIR) / 'models' / 'LicensePlateDetection' / 'my_model.pt'
@@ -61,8 +100,14 @@ _parking_public_feed_updated_at = 0.0
 
 _parking_layout_lock = Lock()
 _parking_layout_spaces = []
+_parking_entry_zone = None
+_parking_exit_zone = None
 
 ALLOWED_VEHICLE_CLASS_NAMES = {'car', 'van', 'motor'}
+VEHICLE_TYPE_LABELS = {
+    'car': 'Car',
+    'motor': 'Motorbike',
+}
 VEHICLE_BOX_COLOR_BGR = (255, 0, 0)
 VEHICLE_BOX_THICKNESS = 2
 
@@ -103,10 +148,11 @@ def _save_uploaded_video_to_temp(uploaded_file):
 def _annotate_entry_frame(frame):
     """Run entry model + OCR/tracker and return yellow-box annotated frame."""
     model = _get_license_plate_model()
+    detection_config = _get_active_detection_confidence_config()
     with _inference_lock:
         results = model.predict(
             source=frame,
-            conf=0.25,
+            conf=float(detection_config.plate_detection_confidence),
             iou=0.45,
             imgsz=640,
             verbose=False,
@@ -114,6 +160,7 @@ def _annotate_entry_frame(frame):
         )
 
     current_detections = []
+    meta_detections = []
     boxes = results[0].boxes
     if boxes is not None and len(boxes):
         h, w = frame.shape[:2]
@@ -139,19 +186,41 @@ def _annotate_entry_frame(frame):
                 'plate_type': plate_type,
             })
 
+            if text:
+                pass
+
+            meta_detections.append({
+                'x1': x1,
+                'y1': y1,
+                'x2': x2,
+                'y2': y2,
+                'text': text,
+                'confidence': float(conf),
+                'plate_type': _normalize_plate_type(plate_type),
+            })
+
     _update_tracker(current_detections)
-    return _draw_license_plate_boxes(frame, results[0])
+    annotated = _draw_license_plate_boxes(frame, results[0])
+    return {
+        'frame': annotated,
+        'meta': {
+            'detections': meta_detections,
+            'frame_width': int(frame.shape[1]),
+            'frame_height': int(frame.shape[0]),
+        },
+    }
 
 
 def _annotate_parking_frame(frame):
     """Run vehicle model and return annotated frame and detection metadata."""
     model = _get_parking_space_model()
+    detection_config = _get_active_detection_confidence_config()
     allowed_class_ids = _get_allowed_vehicle_class_ids(model)
 
     with _parking_inference_lock:
         results = model.predict(
             source=frame,
-            conf=0.50,
+            conf=float(detection_config.parking_detection_confidence),
             iou=0.45,
             imgsz=640,
             classes=allowed_class_ids,
@@ -160,6 +229,8 @@ def _annotate_parking_frame(frame):
         )
 
     detections = _extract_allowed_vehicle_detections(results[0], allowed_class_ids)
+    detections = _assign_track_ids_to_detections(detections)
+    detections = _apply_entry_exit_zone_assignments(detections, frame.shape[1], frame.shape[0])
     annotated = _draw_allowed_vehicle_boxes(frame, results[0], allowed_class_ids)
     annotated, occupancy_stats = _draw_server_parking_layout_overlay(annotated, detections)
     return {
@@ -173,42 +244,56 @@ def _annotate_parking_frame(frame):
     }
 
 
-def _set_parking_layout_spaces(spaces):
-    """Persist normalized parking-space layout used by server-side overlay."""
-    normalized = []
+def _normalize_layout_polygon(raw_shape):
+    if not isinstance(raw_shape, dict):
+        return None
+
+    points = raw_shape.get('points')
+    if not isinstance(points, list) or len(points) < 3:
+        return None
+
+    norm_points = []
+    for pair in points:
+        if not isinstance(pair, (list, tuple)) or len(pair) < 2:
+            continue
+        try:
+            nx = float(pair[0])
+            ny = float(pair[1])
+        except (TypeError, ValueError):
+            continue
+        norm_points.append([
+            min(1.0, max(0.0, nx)),
+            min(1.0, max(0.0, ny)),
+        ])
+
+    if len(norm_points) < 3:
+        return None
+
+    return {
+        'id': str(raw_shape.get('id', '')),
+        'points': norm_points,
+    }
+
+
+def _set_parking_layout_spaces(spaces, entry_zone=None, exit_zone=None):
+    """Persist normalized parking layout and optional entry/exit zones."""
+    normalized_spaces = []
     if isinstance(spaces, list):
         for raw_space in spaces:
-            if not isinstance(raw_space, dict):
+            normalized_space = _normalize_layout_polygon(raw_space)
+            if not normalized_space:
                 continue
-            points = raw_space.get('points')
-            if not isinstance(points, list) or len(points) < 3:
-                continue
+            normalized_spaces.append(normalized_space)
 
-            norm_points = []
-            for pair in points:
-                if not isinstance(pair, (list, tuple)) or len(pair) < 2:
-                    continue
-                try:
-                    nx = float(pair[0])
-                    ny = float(pair[1])
-                except (TypeError, ValueError):
-                    continue
-                norm_points.append([
-                    min(1.0, max(0.0, nx)),
-                    min(1.0, max(0.0, ny)),
-                ])
-
-            if len(norm_points) < 3:
-                continue
-
-            normalized.append({
-                'id': str(raw_space.get('id', '')),
-                'points': norm_points,
-            })
+    normalized_entry_zone = _normalize_layout_polygon(entry_zone)
+    normalized_exit_zone = _normalize_layout_polygon(exit_zone)
 
     with _parking_layout_lock:
         _parking_layout_spaces.clear()
-        _parking_layout_spaces.extend(normalized)
+        _parking_layout_spaces.extend(normalized_spaces)
+        global _parking_entry_zone, _parking_exit_zone
+        _parking_entry_zone = normalized_entry_zone
+        _parking_exit_zone = normalized_exit_zone
 
 
 def _get_parking_layout_spaces():
@@ -220,6 +305,26 @@ def _get_parking_layout_spaces():
             }
             for space in _parking_layout_spaces
         ]
+
+
+def _get_parking_entry_zone():
+    with _parking_layout_lock:
+        if not _parking_entry_zone:
+            return None
+        return {
+            'id': _parking_entry_zone.get('id', ''),
+            'points': [point[:] for point in _parking_entry_zone.get('points', [])],
+        }
+
+
+def _get_parking_exit_zone():
+    with _parking_layout_lock:
+        if not _parking_exit_zone:
+            return None
+        return {
+            'id': _parking_exit_zone.get('id', ''),
+            'points': [point[:] for point in _parking_exit_zone.get('points', [])],
+        }
 
 
 def _bbox_iou_dict(a, b):
@@ -256,6 +361,28 @@ def _point_in_polygon(point, polygon):
     return inside
 
 
+def _polygon_from_normalized(shape, width, height):
+    if not shape or not isinstance(shape, dict):
+        return []
+    points = shape.get('points') or []
+    polygon = []
+    for pair in points:
+        if not isinstance(pair, (list, tuple)) or len(pair) < 2:
+            continue
+        try:
+            polygon.append((float(pair[0]) * float(width), float(pair[1]) * float(height)))
+        except (TypeError, ValueError):
+            continue
+    return polygon
+
+
+def _detection_centroid(det):
+    return (
+        (float(det['x1']) + float(det['x2'])) / 2.0,
+        (float(det['y1']) + float(det['y2'])) / 2.0,
+    )
+
+
 def _draw_server_parking_layout_overlay(frame, detections):
     """Draw saved parking spaces with occupied/empty highlight on server-rendered frame."""
     spaces = _get_parking_layout_spaces()
@@ -269,13 +396,16 @@ def _draw_server_parking_layout_overlay(frame, detections):
     h, w = frame.shape[:2]
     overlay = frame.copy()
     occupied_count = 0
+    occupied_slot_info = {}
 
-    for space in spaces:
+    for idx, space in enumerate(spaces):
         points_px = []
         for nx, ny in space['points']:
             points_px.append((int(round(nx * w)), int(round(ny * h))))
         if len(points_px) < 3:
             continue
+
+        slot_id = (space.get('id') or '').strip() or f'Space-{idx + 1}'
 
         xs = [pt[0] for pt in points_px]
         ys = [pt[1] for pt in points_px]
@@ -287,6 +417,8 @@ def _draw_server_parking_layout_overlay(frame, detections):
         }
 
         occupied = False
+        matched_vehicle_type = None
+        matched_vehicle_id = ''
         for det in detections:
             iou = _bbox_iou_dict(
                 {
@@ -299,18 +431,23 @@ def _draw_server_parking_layout_overlay(frame, detections):
             )
             if iou > 0.3:
                 occupied = True
+                matched_vehicle_type = _normalize_vehicle_type(det.get('class_name'))
+                matched_vehicle_id = str(det.get('plate_text') or '').strip()
                 break
 
-            centroid = (
-                (float(det['x1']) + float(det['x2'])) / 2.0,
-                (float(det['y1']) + float(det['y2'])) / 2.0,
-            )
+            centroid = _detection_centroid(det)
             if _point_in_polygon(centroid, points_px):
                 occupied = True
+                matched_vehicle_type = _normalize_vehicle_type(det.get('class_name'))
+                matched_vehicle_id = str(det.get('plate_text') or '').strip()
                 break
 
         if occupied:
             occupied_count += 1
+            occupied_slot_info[slot_id] = {
+                'vehicle_type': matched_vehicle_type or ParkingRecord.VEHICLE_TYPE_CAR,
+                'vehicle_id': matched_vehicle_id,
+            }
 
         poly = np.array(points_px, dtype=np.int32)
         fill_color = (60, 60, 255) if occupied else (60, 200, 60)
@@ -318,11 +455,29 @@ def _draw_server_parking_layout_overlay(frame, detections):
         cv2.fillPoly(overlay, [poly], fill_color)
         cv2.polylines(frame, [poly], True, line_color, 2)
 
-        label = space['id'] or ''
+        label = slot_id
         if label:
             lx, ly = points_px[0]
             ly = ly + 16 if ly < 16 else ly - 6
             cv2.putText(frame, label, (lx + 4, ly), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2, cv2.LINE_AA)
+
+    entry_polygon = _polygon_from_normalized(_get_parking_entry_zone(), w, h)
+    if len(entry_polygon) >= 3:
+        entry_poly = np.array(entry_polygon, dtype=np.int32)
+        cv2.fillPoly(overlay, [entry_poly], (20, 120, 220))
+        cv2.polylines(frame, [entry_poly], True, (30, 160, 255), 2)
+        ex, ey = entry_polygon[0]
+        cv2.putText(frame, 'ENTRY', (int(ex) + 4, int(ey) - 6 if ey > 20 else int(ey) + 18), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2, cv2.LINE_AA)
+
+    exit_polygon = _polygon_from_normalized(_get_parking_exit_zone(), w, h)
+    if len(exit_polygon) >= 3:
+        exit_poly = np.array(exit_polygon, dtype=np.int32)
+        cv2.fillPoly(overlay, [exit_poly], (60, 60, 220))
+        cv2.polylines(frame, [exit_poly], True, (80, 80, 255), 2)
+        sx, sy = exit_polygon[0]
+        cv2.putText(frame, 'EXIT', (int(sx) + 4, int(sy) - 6 if sy > 20 else int(sy) + 18), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2, cv2.LINE_AA)
+
+    _sync_parking_record_tracker(occupied_slot_info)
 
     cv2.addWeighted(overlay, 0.24, frame, 0.76, 0, frame)
     total_count = len(spaces)
@@ -714,6 +869,400 @@ PLATE_TYPE_OPTIONS = [
     PLATE_TYPE_EMBOSSED,
 ]
 
+_parking_record_tracker_lock = Lock()
+_active_parking_records_by_slot = {}
+_PARKING_EXIT_MISS_FRAMES = 10
+
+
+_parking_track_lock = Lock()
+_parking_next_track_id = 1
+_parking_active_tracks = {}
+_parking_track_plate_assignments = {}
+_PARKING_TRACK_MAX_MISS_FRAMES = 15
+_PARKING_TRACK_MATCH_DISTANCE_PX = 90.0
+
+
+def _mark_current_best_plate_for_saving():
+    with _tracker_lock:
+        if not _active_plates:
+            return None
+        
+        # Only consider plates that have actually been recognized
+        valid_plates = [p for p in _active_plates if p.get('best_text')]
+        if not valid_plates:
+            return None
+            
+        best_plate = max(valid_plates, key=lambda x: (x.get('frame_count', 0), x.get('best_conf', 0.0)))
+        best_plate['should_save'] = True
+        return {
+            'plate_text': best_plate['best_text'],
+            'plate_type': best_plate.get('plate_type', 'unknown'),
+        }
+
+
+def _assign_track_ids_to_detections(detections):
+    global _parking_next_track_id
+    now_ts = time.time()
+    assigned = []
+
+    with _parking_track_lock:
+        for track in _parking_active_tracks.values():
+            track['matched'] = False
+
+        for det in detections:
+            centroid = _detection_centroid(det)
+            best_track_id = None
+            best_distance = None
+
+            for track_id, track in _parking_active_tracks.items():
+                distance = math.dist(centroid, track['centroid'])
+                if distance > _PARKING_TRACK_MATCH_DISTANCE_PX:
+                    continue
+                if best_distance is None or distance < best_distance:
+                    best_distance = distance
+                    best_track_id = track_id
+
+            if best_track_id is None:
+                best_track_id = _parking_next_track_id
+                _parking_next_track_id += 1
+                _parking_active_tracks[best_track_id] = {
+                    'centroid': centroid,
+                    'miss_frames': 0,
+                    'matched': True,
+                    'last_seen': now_ts,
+                }
+            else:
+                _parking_active_tracks[best_track_id].update({
+                    'centroid': centroid,
+                    'miss_frames': 0,
+                    'matched': True,
+                    'last_seen': now_ts,
+                })
+
+            enriched = dict(det)
+            enriched['track_id'] = best_track_id
+            assigned.append(enriched)
+
+        stale_track_ids = []
+        for track_id, track in _parking_active_tracks.items():
+            if track.get('matched'):
+                continue
+            track['miss_frames'] = int(track.get('miss_frames', 0)) + 1
+            if track['miss_frames'] >= _PARKING_TRACK_MAX_MISS_FRAMES:
+                stale_track_ids.append(track_id)
+
+        for stale_id in stale_track_ids:
+            _parking_active_tracks.pop(stale_id, None)
+            _parking_track_plate_assignments.pop(stale_id, None)
+
+    return assigned
+
+
+def _apply_entry_exit_zone_assignments(detections, frame_width, frame_height):
+    entry_zone = _get_parking_entry_zone()
+    exit_zone = _get_parking_exit_zone()
+
+    entry_polygon = _polygon_from_normalized(entry_zone, frame_width, frame_height)
+    exit_polygon = _polygon_from_normalized(exit_zone, frame_width, frame_height)
+
+    with _parking_track_lock:
+        for det in detections:
+            track_id = det.get('track_id')
+            if track_id is None:
+                continue
+
+            centroid = _detection_centroid(det)
+            inside_entry = len(entry_polygon) >= 3 and _point_in_polygon(centroid, entry_polygon)
+            inside_exit = len(exit_polygon) >= 3 and _point_in_polygon(centroid, exit_polygon)
+
+            assignment = _parking_track_plate_assignments.get(track_id)
+            if assignment is None:
+                assignment = {}
+                _parking_track_plate_assignments[track_id] = assignment
+
+            was_inside_entry = bool(assignment.get('inside_entry'))
+            was_inside_exit = bool(assignment.get('inside_exit'))
+
+            if inside_entry and not assignment.get('plate_text'):
+                plate_info = _mark_current_best_plate_for_saving()
+                if plate_info:
+                    assignment['plate_text'] = plate_info['plate_text']
+                    assignment['plate_type'] = plate_info['plate_type']
+                    assignment['assigned_at'] = time.time()
+
+            if inside_exit and not was_inside_exit:
+                assignment.pop('plate_text', None)
+                assignment.pop('plate_type', None)
+                assignment.pop('assigned_at', None)
+
+            assignment['inside_entry'] = inside_entry
+            assignment['inside_exit'] = inside_exit
+
+            if assignment.get('plate_text'):
+                det['plate_text'] = assignment['plate_text']
+
+    return detections
+
+
+def _reset_parking_track_state():
+    global _parking_next_track_id
+    with _parking_track_lock:
+        _parking_active_tracks.clear()
+        _parking_track_plate_assignments.clear()
+        _parking_next_track_id = 1
+
+
+def _get_active_detection_confidence_config():
+    config = DetectionConfidenceConfig.objects.filter(is_active=True).order_by('-updated_at').first()
+    if config is None:
+        config = DetectionConfidenceConfig.objects.create(
+            plate_detection_confidence=0.25,
+            parking_detection_confidence=0.50,
+            is_active=True,
+        )
+    return config
+
+
+def _normalize_vehicle_type(raw_value):
+    normalized = str(raw_value or '').strip().lower().replace('-', '_').replace(' ', '_')
+    if normalized in {'van', 'car'}:
+        return ParkingFeeConfig.VEHICLE_TYPE_CAR
+    if normalized in {'motor', 'motorbike', 'motorcycle'}:
+        return ParkingFeeConfig.VEHICLE_TYPE_MOTOR
+    return ParkingFeeConfig.VEHICLE_TYPE_CAR
+
+
+def _get_fee_config_display_label(vehicle_type):
+    normalized = _normalize_vehicle_type(vehicle_type)
+    return VEHICLE_TYPE_LABELS.get(normalized, 'Car')
+
+
+def _generate_parking_session_id():
+    return f"PR-{timezone.now():%Y%m%d%H%M%S}-{uuid.uuid4().hex[:6].upper()}"
+
+
+def _start_parking_record(slot_id, vehicle_id='', vehicle_type='car'):
+    normalized_vehicle = str(vehicle_id or '').strip()
+    normalized_vehicle_type = _normalize_vehicle_type(vehicle_type)
+    fee_config = _get_active_parking_fee_config(normalized_vehicle_type)
+    record = ParkingRecord.objects.create(
+        session_id=_generate_parking_session_id(),
+        entry_time=timezone.now(),
+        slot_id=(str(slot_id or '').strip() or 'Unknown')[:64],
+        vehicle_id=normalized_vehicle[:64],
+        vehicle_type=normalized_vehicle_type,
+        fee_billing_unit=getattr(fee_config, 'billing_unit', '') or '',
+        fee_rate=getattr(fee_config, 'rate', None),
+        plate_detected=bool(normalized_vehicle),
+    )
+    logger.info('Parking record started -> %s (%s)', record.session_id, record.slot_id)
+    return int(record.pk)
+
+
+def _close_parking_record(record_id):
+    updated = ParkingRecord.objects.filter(id=record_id, exit_time__isnull=True).update(exit_time=timezone.now())
+    return bool(updated)
+
+
+def _update_active_record_vehicle(record_id, vehicle_id):
+    normalized_vehicle = str(vehicle_id or '').strip()[:64]
+    if not normalized_vehicle:
+        return False
+    updated = ParkingRecord.objects.filter(
+        id=record_id,
+        exit_time__isnull=True,
+    ).filter(
+        Q(vehicle_id='') | Q(vehicle_id__isnull=True)
+    ).update(
+        vehicle_id=normalized_vehicle,
+        plate_detected=True,
+    )
+    return bool(updated)
+
+
+def _sync_parking_record_tracker(occupied_slot_info):
+    if isinstance(occupied_slot_info, dict):
+        normalized_occupied = {}
+        for slot_id, slot_data in occupied_slot_info.items():
+            normalized_slot = (str(slot_id or '').strip() or 'Unknown')[:64]
+            if isinstance(slot_data, dict):
+                normalized_occupied[normalized_slot] = {
+                    'vehicle_type': _normalize_vehicle_type(slot_data.get('vehicle_type')),
+                    'vehicle_id': str(slot_data.get('vehicle_id') or '').strip()[:64],
+                }
+            else:
+                normalized_occupied[normalized_slot] = {
+                    'vehicle_type': _normalize_vehicle_type(slot_data),
+                    'vehicle_id': '',
+                }
+    else:
+        normalized_occupied = {
+            (str(slot_id or '').strip() or 'Unknown')[:64]: {
+                'vehicle_type': ParkingRecord.VEHICLE_TYPE_CAR,
+                'vehicle_id': '',
+            }
+            for slot_id in occupied_slot_info
+        }
+
+    with _parking_record_tracker_lock:
+        for slot_id, slot_data in normalized_occupied.items():
+            vehicle_type = slot_data.get('vehicle_type', ParkingRecord.VEHICLE_TYPE_CAR)
+            vehicle_id = str(slot_data.get('vehicle_id') or '').strip()[:64]
+            active = _active_parking_records_by_slot.get(slot_id)
+            if active is None:
+                record_id = _start_parking_record(slot_id, vehicle_id=vehicle_id, vehicle_type=vehicle_type)
+                _active_parking_records_by_slot[slot_id] = {
+                    'record_id': record_id,
+                    'miss_frames': 0,
+                    'vehicle_id': vehicle_id,
+                }
+                continue
+
+            active['miss_frames'] = 0
+            if vehicle_id and not active.get('vehicle_id'):
+                if _update_active_record_vehicle(active['record_id'], vehicle_id):
+                    active['vehicle_id'] = vehicle_id
+
+        for slot_id in list(_active_parking_records_by_slot.keys()):
+            if slot_id in normalized_occupied:
+                continue
+
+            active = _active_parking_records_by_slot[slot_id]
+            active['miss_frames'] += 1
+            if active['miss_frames'] < _PARKING_EXIT_MISS_FRAMES:
+                continue
+
+            _close_parking_record(active['record_id'])
+            _active_parking_records_by_slot.pop(slot_id, None)
+
+
+def flush_active_parking_records():
+    with _parking_record_tracker_lock:
+        for active in _active_parking_records_by_slot.values():
+            _close_parking_record(active['record_id'])
+        _active_parking_records_by_slot.clear()
+
+
+def close_stale_open_parking_records():
+    ParkingRecord.objects.filter(exit_time__isnull=True).update(exit_time=timezone.now())
+
+
+def _format_duration_seconds(start_time, end_time=None):
+    if not start_time:
+        return '-'
+
+    effective_end = end_time or timezone.now()
+    total_seconds = max(0, int((effective_end - start_time).total_seconds()))
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+
+    if hours > 0:
+        return f"{hours}h {minutes}m"
+    if minutes > 0:
+        return f"{minutes}m {seconds}s"
+    return f"{seconds}s"
+
+
+def _iso_or_none(value):
+    return value.isoformat() if value else None
+
+
+def _get_active_parking_fee_config(vehicle_type='car'):
+    normalized_vehicle_type = _normalize_vehicle_type(vehicle_type)
+    return ParkingFeeConfig.objects.filter(
+        vehicle_type=normalized_vehicle_type,
+        is_active=True,
+    ).order_by('-created_at').first()
+
+
+def _get_active_parking_fee_configs():
+    return {vehicle_type: _get_active_parking_fee_config(vehicle_type) for vehicle_type in VEHICLE_TYPE_LABELS}
+
+
+def _get_historical_fee_config_for_record(record):
+    normalized_vehicle_type = _normalize_vehicle_type(getattr(record, 'vehicle_type', 'car'))
+    entry_time = getattr(record, 'entry_time', None)
+    if entry_time is None:
+        return _get_active_parking_fee_config(normalized_vehicle_type)
+
+    fee_config = ParkingFeeConfig.objects.filter(
+        vehicle_type=normalized_vehicle_type,
+        created_at__lte=entry_time,
+    ).order_by('-created_at').first()
+    if fee_config is not None:
+        return fee_config
+
+    return _get_active_parking_fee_config(normalized_vehicle_type)
+
+
+def _calculate_parking_fee_for_record(record, fee_config=None):
+    unit_seconds_map = {
+        ParkingFeeConfig.UNIT_MINUTE: 60,
+        ParkingFeeConfig.UNIT_HOUR: 3600,
+        ParkingFeeConfig.UNIT_DAY: 86400,
+        ParkingFeeConfig.UNIT_MONTH: 30 * 24 * 3600,
+    }
+
+    if fee_config is None:
+        stored_billing_unit = str(getattr(record, 'fee_billing_unit', '') or '').strip().lower()
+        stored_rate = getattr(record, 'fee_rate', None)
+        if stored_billing_unit and stored_rate is not None:
+            fee_config = {
+                'billing_unit': stored_billing_unit,
+                'rate': stored_rate,
+                'vehicle_type': _normalize_vehicle_type(getattr(record, 'vehicle_type', 'car')),
+            }
+        else:
+            fee_config = _get_historical_fee_config_for_record(record)
+
+    if fee_config is None:
+        return {
+            'duration': record.duration_display,
+            'billable_units': 0,
+            'fee': Decimal('0.00'),
+            'vehicle_type': _normalize_vehicle_type(getattr(record, 'vehicle_type', 'car')),
+        }
+
+    billing_unit = fee_config['billing_unit'] if isinstance(fee_config, dict) else fee_config.billing_unit
+    rate_value = fee_config['rate'] if isinstance(fee_config, dict) else fee_config.rate
+    config_vehicle_type = fee_config['vehicle_type'] if isinstance(fee_config, dict) else fee_config.vehicle_type
+
+    end_time = record.exit_time or timezone.now()
+    total_seconds = max(0, int((end_time - record.entry_time).total_seconds()))
+    seconds_per_unit = unit_seconds_map.get(billing_unit, 3600)
+    billable_units = max(1, int(math.ceil(total_seconds / float(seconds_per_unit))))
+    fee_amount = (Decimal(billable_units) * Decimal(rate_value)).quantize(Decimal('0.01'))
+
+    return {
+        'duration': _format_duration_seconds(record.entry_time, record.exit_time),
+        'billable_units': billable_units,
+        'fee': fee_amount,
+        'vehicle_type': _normalize_vehicle_type(getattr(record, 'vehicle_type', config_vehicle_type)),
+        'billing_unit': billing_unit,
+    }
+
+
+def _get_today_revenue_total():
+    """Return total revenue for records that exited on the current local day."""
+    today_local = timezone.localtime(timezone.now()).date()
+    completed_today = ParkingRecord.objects.filter(
+        exit_time__isnull=False,
+        exit_time__date=today_local,
+    ).only(
+        'entry_time',
+        'exit_time',
+        'vehicle_type',
+        'fee_billing_unit',
+        'fee_rate',
+    )
+
+    today_revenue = Decimal('0.00')
+    for record in completed_today.iterator():
+        fee_info = _calculate_parking_fee_for_record(record)
+        today_revenue += fee_info['fee']
+
+    return today_revenue
+
 
 def _normalize_plate_type(raw_value):
     normalized = str(raw_value or '').strip().lower().replace('-', '_').replace(' ', '_')
@@ -806,8 +1355,8 @@ def _update_tracker(current_detections: list[dict]):
             elif now - ap['last_seen'] < _EXIT_TIMEOUT_S:
                 remaining.append(ap)
             else:
-                # Plate has left - write to DB if we got text and more than 1 frame.
-                if ap['best_text'] and ap['frame_count'] > 1:
+                # Plate has left - write to DB if we got text, more than 1 frame, and it was assigned to a vehicle.
+                if ap['best_text'] and ap['frame_count'] > 1 and ap.get('should_save'):
                     _save_plate_to_db(ap)
 
         # --- register new detections ---
@@ -832,27 +1381,31 @@ def flush_active_plates():
     """Flush all remaining active plates to DB (e.g. when the feed stops)."""
     with _tracker_lock:
         for ap in _active_plates:
-            if ap['best_text'] and ap['frame_count'] > 1:
+            if ap['best_text'] and ap['frame_count'] > 1 and ap.get('should_save'):
                 _save_plate_to_db(ap)
         _active_plates.clear()
 
 
 def parking_monitoring(request):
     """Display the parking lot monitoring dashboard."""
-    # Check if user is logged in
-    if not request.session.get('user_id'):
-        return redirect('login')
-    
-    # Enforce email verification
-    guard = _check_verified(request)
+    guard = _admin_guard_or_redirect(request)
     if guard:
         return guard
-    
-    return render(request, 'dashboards/parking_monitoring.html')
+
+    return render(
+        request,
+        'dashboards/parking_monitoring.html',
+        {
+            'today_revenue': float(_get_today_revenue_total()),
+        },
+    )
 
 
 def _is_admin_session(request):
-    return bool(request.session.get('user_id')) and request.session.get('role') == 'admin'
+    user = _get_session_user(request)
+    if not user:
+        return False
+    return user.role == 'admin' and bool(user.verified_status)
 
 
 def _admin_guard_or_redirect(request):
@@ -863,9 +1416,32 @@ def _admin_guard_or_redirect(request):
     if guard:
         return guard
 
-    if request.session.get('role') != 'admin':
-        messages.error(request, 'Admin access is required for this page.')
-        return redirect('user_dashboard')
+    user = _get_session_user(request)
+    if not user:
+        return redirect('login')
+
+    request.session['role'] = user.role
+    if user.role != 'admin':
+        return _render_access_denied(request, required_role='admin')
+
+    return None
+
+
+def _driver_guard_or_redirect(request):
+    if not request.session.get('user_id'):
+        return redirect('login')
+
+    guard = _check_verified(request)
+    if guard:
+        return guard
+
+    user = _get_session_user(request)
+    if not user:
+        return redirect('login')
+
+    request.session['role'] = user.role
+    if user.role != 'driver':
+        return _render_access_denied(request, required_role='driver')
 
     return None
 
@@ -902,12 +1478,20 @@ def _start_server_feed(runtime, request, feed_name):
             source_ref = _save_uploaded_video_to_temp(file_obj)
             source_label = file_obj.name
 
+        if feed_name == 'parking':
+            close_stale_open_parking_records()
+            flush_active_parking_records()
+            _reset_parking_track_state()
+        if feed_name == 'entry':
+            pass
+
         runtime.start(source_type, source_ref, source_label)
         if feed_name == 'parking':
             _set_parking_public_feed_state(True, source_type=source_type, source_label=source_label)
         return JsonResponse({'status': 'ok', 'active': True, 'source_type': source_type, 'source_label': source_label})
     except Exception as exc:
-        return JsonResponse({'error': f'Failed to start {feed_name} source: {exc}'}, status=500)
+        logger.exception('Failed to start %s source: %s', feed_name, exc)
+        return JsonResponse({'error': f'Failed to start {feed_name} source'}, status=500)
 
 
 def _remove_server_feed(runtime, request, feed_name):
@@ -917,8 +1501,11 @@ def _remove_server_feed(runtime, request, feed_name):
     runtime.stop(clear_latest=True)
     if feed_name == 'parking':
         _set_parking_public_feed_state(False, clear_frame=True)
+        flush_active_parking_records()
+        _reset_parking_track_state()
     if feed_name == 'entry':
         flush_active_plates()
+        pass
     return JsonResponse({'status': 'ok', 'active': False})
 
 
@@ -1025,6 +1612,16 @@ def parking_live_metadata(request):
     })
 
 
+def parking_today_revenue(request):
+    if not _is_admin_session(request):
+        return JsonResponse({'error': 'Admin privileges required'}, status=403)
+
+    return JsonResponse({
+        'today_revenue': float(_get_today_revenue_total()),
+        'currency': 'Rs',
+    })
+
+
 def parking_public_stats(request):
     """Public parking occupancy summary for home page widgets."""
     snap = _parking_server_runtime.snapshot()
@@ -1059,18 +1656,29 @@ def save_parking_layout(request):
 
     try:
         payload = json.loads(request.body.decode('utf-8') or '{}')
-    except Exception:
+    except (UnicodeDecodeError, JSONDecodeError):
         return JsonResponse({'error': 'Invalid JSON payload'}, status=400)
 
     spaces = payload.get('spaces', [])
-    _set_parking_layout_spaces(spaces)
-    return JsonResponse({'status': 'ok', 'count': len(_get_parking_layout_spaces())})
+    entry_zone = payload.get('entry_zone')
+    exit_zone = payload.get('exit_zone')
+    _set_parking_layout_spaces(spaces, entry_zone=entry_zone, exit_zone=exit_zone)
+    return JsonResponse({
+        'status': 'ok',
+        'count': len(_get_parking_layout_spaces()),
+        'has_entry_zone': bool(_get_parking_entry_zone()),
+        'has_exit_zone': bool(_get_parking_exit_zone()),
+    })
 
 
 def get_parking_layout(request):
     if not request.session.get('user_id'):
         return JsonResponse({'error': 'Unauthorized'}, status=401)
-    return JsonResponse({'spaces': _get_parking_layout_spaces()})
+    return JsonResponse({
+        'spaces': _get_parking_layout_spaces(),
+        'entry_zone': _get_parking_entry_zone(),
+        'exit_zone': _get_parking_exit_zone(),
+    })
 
 
 @require_POST
@@ -1081,7 +1689,7 @@ def update_parking_source_state(request):
 
     try:
         payload = json.loads(request.body.decode('utf-8') or '{}')
-    except Exception:
+    except (UnicodeDecodeError, JSONDecodeError):
         return JsonResponse({'error': 'Invalid JSON payload'}, status=400)
 
     active = bool(payload.get('active', False))
@@ -1092,6 +1700,7 @@ def update_parking_source_state(request):
         _set_parking_public_feed_state(True, source_type=source_type, source_label=source_label)
     else:
         _set_parking_public_feed_state(False, clear_frame=True)
+        flush_active_parking_records()
 
     return JsonResponse({'status': 'ok'})
 
@@ -1138,10 +1747,11 @@ def process_entry_frame(request):
             return JsonResponse({'error': 'Invalid image frame'}, status=400)
 
         model = _get_license_plate_model()
+        detection_config = _get_active_detection_confidence_config()
         with _inference_lock:
             results = model.predict(
                 source=frame,
-                conf=0.25,
+                conf=float(detection_config.plate_detection_confidence),
                 iou=0.45,
                 imgsz=640,
                 verbose=False,
@@ -1213,12 +1823,13 @@ def process_parking_frame(request):
             return JsonResponse({'error': 'Invalid image frame'}, status=400)
 
         model = _get_parking_space_model()
+        detection_config = _get_active_detection_confidence_config()
         allowed_class_ids = _get_allowed_vehicle_class_ids(model)
 
         with _parking_inference_lock:
             results = model.predict(
                 source=frame,
-                conf=0.50,
+                conf=float(detection_config.parking_detection_confidence),
                 iou=0.45,
                 imgsz=640,
                 classes=allowed_class_ids,
@@ -1241,12 +1852,7 @@ def process_parking_frame(request):
 
 def user_management(request):
     """Display the user management dashboard."""
-    # Check if user is logged in
-    if not request.session.get('user_id'):
-        return redirect('login')
-    
-    # Enforce email verification
-    guard = _check_verified(request)
+    guard = _admin_guard_or_redirect(request)
     if guard:
         return guard
     
@@ -1268,11 +1874,19 @@ def user_management(request):
     # Apply role filter
     if role_filter and role_filter != 'all':
         users = users.filter(role=role_filter)
+
+    paginator = Paginator(users, 10)
+    page_number = request.GET.get('page', 1)
+    users_page = paginator.get_page(page_number)
+
+    query_params = request.GET.copy()
+    query_params.pop('page', None)
     
     context = {
-        'users': users,
+        'users': users_page,
         'search_query': search_query,
         'role_filter': role_filter,
+        'query_string': query_params.urlencode(),
     }
     
     return render(request, 'dashboards/user_management.html', context)
@@ -1280,13 +1894,9 @@ def user_management(request):
 
 def delete_user(request, user_id):
     """Delete a user from the system."""
-    # Check if user is logged in and is admin
-    if not request.session.get('user_id'):
-        return redirect('login')
-    
-    if request.session.get('role') != 'admin':
-        messages.error(request, 'You do not have permission to delete users.')
-        return redirect('user_management')
+    guard = _admin_guard_or_redirect(request)
+    if guard:
+        return guard
     
     # Prevent deleting yourself
     if request.session.get('user_id') == user_id:
@@ -1303,13 +1913,9 @@ def delete_user(request, user_id):
 
 def edit_user(request, user_id):
     """Edit user details (username and role)."""
-    # Check if user is logged in and is admin
-    if not request.session.get('user_id'):
-        return redirect('login')
-    
-    if request.session.get('role') != 'admin':
-        messages.error(request, 'You do not have permission to edit users.')
-        return redirect('user_management')
+    guard = _admin_guard_or_redirect(request)
+    if guard:
+        return guard
     
     user = get_object_or_404(User, user_id=user_id)
     
@@ -1372,16 +1978,509 @@ def edit_user(request, user_id):
 
 def parking_records(request):
     """Display the parking records/history dashboard."""
-    # Check if user is logged in
-    if not request.session.get('user_id'):
-        return redirect('login')
-    
-    # Enforce email verification
-    guard = _check_verified(request)
+    guard = _admin_guard_or_redirect(request)
     if guard:
         return guard
-    
-    return render(request, 'dashboards/parking_records.html')
+
+    vehicle_query = request.GET.get('vehicle', '').strip()
+    period = request.GET.get('period', '').strip().lower() or 'day'
+    day_value = request.GET.get('day', '').strip()
+    month_value = request.GET.get('month', '').strip()
+    year_value = request.GET.get('year', '').strip()
+    date_query = request.GET.get('date', '').strip()
+    has_explicit_period_filter = any([
+        request.GET.get('period'),
+        request.GET.get('day'),
+        request.GET.get('month'),
+        request.GET.get('year'),
+        request.GET.get('date'),
+    ])
+
+    if date_query and not day_value:
+        day_value = date_query
+        period = 'day'
+
+    valid_periods = {'day', 'month', 'year'}
+    if period not in valid_periods:
+        period = 'day'
+
+    today = timezone.localdate()
+    if period == 'day' and not day_value and not month_value and not year_value:
+        day_value = today.isoformat()
+    if period == 'month' and not month_value:
+        month_value = today.strftime('%Y-%m')
+    if period == 'year' and not year_value:
+        year_value = str(today.year)
+
+    records = ParkingRecord.objects.all().order_by('-entry_time')
+    if vehicle_query:
+        records = records.filter(
+            Q(vehicle_id__icontains=vehicle_query) |
+            Q(session_id__icontains=vehicle_query) |
+            Q(slot_id__icontains=vehicle_query)
+        )
+    records_base = records
+
+    selected_day = ''
+    selected_month = ''
+    selected_year = ''
+
+    if period == 'day':
+        try:
+            parsed_date = datetime.strptime(day_value, '%Y-%m-%d').date() if day_value else today
+            records = records.filter(entry_time__date=parsed_date)
+            selected_day = parsed_date.isoformat()
+        except ValueError:
+            messages.warning(request, 'Invalid date filter. Please use YYYY-MM-DD.')
+            selected_day = today.isoformat()
+            records = records.filter(entry_time__date=today)
+
+        if not has_explicit_period_filter and not records.exists():
+            latest_entry_time = records_base.values_list('entry_time', flat=True).first()
+            if latest_entry_time is not None:
+                fallback_day = timezone.localtime(latest_entry_time).date()
+                selected_day = fallback_day.isoformat()
+                records = records_base.filter(entry_time__date=fallback_day)
+    elif period == 'month':
+        try:
+            parsed_month = datetime.strptime(month_value, '%Y-%m').date() if month_value else today.replace(day=1)
+            records = records.filter(entry_time__year=parsed_month.year, entry_time__month=parsed_month.month)
+            selected_month = parsed_month.strftime('%Y-%m')
+        except ValueError:
+            messages.warning(request, 'Invalid month filter. Please use YYYY-MM.')
+            fallback_month = today.strftime('%Y-%m')
+            parsed_month = datetime.strptime(fallback_month, '%Y-%m').date()
+            selected_month = fallback_month
+            records = records.filter(entry_time__year=parsed_month.year, entry_time__month=parsed_month.month)
+    else:
+        try:
+            parsed_year = int(year_value) if year_value else today.year
+            if parsed_year < 2000 or parsed_year > 2100:
+                raise ValueError()
+            records = records.filter(entry_time__year=parsed_year)
+            selected_year = str(parsed_year)
+        except ValueError:
+            messages.warning(request, 'Invalid year filter. Please use a valid year.')
+            selected_year = str(today.year)
+            records = records.filter(entry_time__year=today.year)
+
+    if not selected_day:
+        selected_day = today.isoformat()
+    if not selected_month:
+        selected_month = today.strftime('%Y-%m')
+    if not selected_year:
+        selected_year = str(today.year)
+
+    paginator = Paginator(records, 10)
+    page_number = request.GET.get('page', 1)
+    records_page = paginator.get_page(page_number)
+    record_rows = []
+    for record in records_page:
+        fee_info = _calculate_parking_fee_for_record(record)
+        record_rows.append({
+            'record': record,
+            'fee_info': fee_info,
+        })
+
+    query_params = request.GET.copy()
+    query_params.pop('page', None)
+
+    return render(request, 'dashboards/parking_records.html', {
+        'records': records_page,
+        'record_rows': record_rows,
+        'vehicle_query': vehicle_query,
+        'date_query': selected_day,
+        'period': period,
+        'day_value': selected_day,
+        'month_value': selected_month,
+        'year_value': selected_year,
+        'query_string': query_params.urlencode(),
+    })
+
+
+def parking_settings(request):
+    """Allow admin to configure parking fee allocation settings."""
+    guard = _admin_guard_or_redirect(request)
+    if guard:
+        return guard
+
+    vehicle_types = list(VEHICLE_TYPE_LABELS.keys())
+    if request.method == 'POST':
+        fee_payloads = {}
+        valid_units = {
+            ParkingFeeConfig.UNIT_MINUTE,
+            ParkingFeeConfig.UNIT_HOUR,
+            ParkingFeeConfig.UNIT_DAY,
+            ParkingFeeConfig.UNIT_MONTH,
+        }
+
+        for vehicle_type in vehicle_types:
+            billing_unit = request.POST.get(f'{vehicle_type}_billing_unit', '').strip().lower()
+            rate_raw = request.POST.get(f'{vehicle_type}_rate', '').strip()
+
+            if billing_unit not in valid_units:
+                messages.error(request, f'Invalid billing unit selected for {VEHICLE_TYPE_LABELS[vehicle_type].lower()}.')
+                return redirect('parking_settings')
+
+            try:
+                rate_value = Decimal(rate_raw)
+                if rate_value < 0:
+                    raise ValueError()
+                rate_value = rate_value.quantize(Decimal('0.01'))
+            except Exception:
+                messages.error(request, f'Rate must be a valid non-negative amount for {VEHICLE_TYPE_LABELS[vehicle_type].lower()}.')
+                return redirect('parking_settings')
+
+            fee_payloads[vehicle_type] = {
+                'billing_unit': billing_unit,
+                'rate': rate_value,
+            }
+
+        plate_conf_raw = request.POST.get('plate_detection_confidence', '').strip()
+        parking_conf_raw = request.POST.get('parking_detection_confidence', '').strip()
+
+        try:
+            plate_conf_value = float(plate_conf_raw)
+            parking_conf_value = float(parking_conf_raw)
+            if not (0.0 <= plate_conf_value <= 1.0 and 0.0 <= parking_conf_value <= 1.0):
+                raise ValueError()
+        except Exception:
+            messages.error(request, 'Model confidence values must be between 0.00 and 1.00.')
+            return redirect('parking_settings')
+
+        with transaction.atomic():
+            for vehicle_type, payload in fee_payloads.items():
+                ParkingFeeConfig.objects.filter(vehicle_type=vehicle_type, is_active=True).update(is_active=False)
+                ParkingFeeConfig.objects.create(
+                    vehicle_type=vehicle_type,
+                    billing_unit=payload['billing_unit'],
+                    rate=payload['rate'],
+                    is_active=True,
+                )
+
+        DetectionConfidenceConfig.objects.filter(is_active=True).update(is_active=False)
+        DetectionConfidenceConfig.objects.create(
+            plate_detection_confidence=round(plate_conf_value, 2),
+            parking_detection_confidence=round(parking_conf_value, 2),
+            is_active=True,
+        )
+
+        messages.success(request, 'Parking settings updated successfully.')
+        return redirect('parking_settings')
+
+    fee_configs = _get_active_parking_fee_configs()
+    vehicle_fee_configs = [
+        {
+            'vehicle_type': vehicle_type,
+            'vehicle_label': VEHICLE_TYPE_LABELS[vehicle_type],
+            'config': fee_configs.get(vehicle_type),
+        }
+        for vehicle_type in vehicle_types
+    ]
+    confidence_config = _get_active_detection_confidence_config()
+    return render(request, 'dashboards/parking_settings.html', {
+        'vehicle_fee_configs': vehicle_fee_configs,
+        'confidence_config': confidence_config,
+        'unit_choices': ParkingFeeConfig.BILLING_UNIT_CHOICES,
+    })
+
+
+def system_stats(request):
+    """Render system-wide analytics for admin dashboard."""
+    guard = _admin_guard_or_redirect(request)
+    if guard:
+        return guard
+
+    now_local = timezone.localtime(timezone.now())
+    today = now_local.date()
+
+    stats_period = request.GET.get('period', '').strip().lower() or 'month'
+    period_day = request.GET.get('day', '').strip()
+    period_month = request.GET.get('month', '').strip()
+    period_year = request.GET.get('year', '').strip()
+    has_explicit_stats_period = any([
+        request.GET.get('period'),
+        request.GET.get('day'),
+        request.GET.get('month'),
+        request.GET.get('year'),
+    ])
+
+    if not has_explicit_stats_period:
+        candidate_dates = []
+        latest_record_entry = ParkingRecord.objects.order_by('-entry_time').values_list('entry_time', flat=True).first()
+        latest_detection_time = PlateDetectionHistory.objects.order_by('-timestamp').values_list('timestamp', flat=True).first()
+        latest_user_created = User.objects.order_by('-created_at').values_list('created_at', flat=True).first()
+
+        if latest_record_entry is not None:
+            candidate_dates.append(timezone.localtime(latest_record_entry).date())
+        if latest_detection_time is not None:
+            candidate_dates.append(timezone.localtime(latest_detection_time).date())
+        if latest_user_created is not None:
+            candidate_dates.append(timezone.localtime(latest_user_created).date())
+
+        if candidate_dates:
+            latest_date = max(candidate_dates)
+            stats_period = 'month'
+            period_month = latest_date.strftime('%Y-%m')
+
+    if stats_period not in {'day', 'month', 'year'}:
+        stats_period = 'month'
+
+    period_start_date = today
+    period_end_date = today + timedelta(days=1)
+    selected_day = ''
+    selected_month = ''
+    selected_year = ''
+
+    if stats_period == 'day':
+        try:
+            selected_date = datetime.strptime(period_day, '%Y-%m-%d').date() if period_day else today
+        except ValueError:
+            selected_date = today
+        period_start_date = selected_date
+        period_end_date = selected_date + timedelta(days=1)
+        selected_day = selected_date.isoformat()
+    elif stats_period == 'month':
+        try:
+            selected_month_date = datetime.strptime(period_month, '%Y-%m').date() if period_month else today.replace(day=1)
+        except ValueError:
+            selected_month_date = today.replace(day=1)
+        period_start_date = selected_month_date.replace(day=1)
+        if period_start_date.month == 12:
+            period_end_date = date(period_start_date.year + 1, 1, 1)
+        else:
+            period_end_date = date(period_start_date.year, period_start_date.month + 1, 1)
+        selected_month = period_start_date.strftime('%Y-%m')
+    else:
+        try:
+            selected_year_int = int(period_year) if period_year else today.year
+            if selected_year_int < 2000 or selected_year_int > 2100:
+                raise ValueError()
+        except ValueError:
+            selected_year_int = today.year
+        period_start_date = date(selected_year_int, 1, 1)
+        period_end_date = date(selected_year_int + 1, 1, 1)
+        selected_year = str(selected_year_int)
+
+    # Keep all period inputs pre-filled so switching period client-side never shows empty controls.
+    if not selected_day:
+        selected_day = today.isoformat()
+    if not selected_month:
+        selected_month = today.strftime('%Y-%m')
+    if not selected_year:
+        selected_year = str(today.year)
+
+    all_users = User.objects.filter(created_at__date__gte=period_start_date, created_at__date__lt=period_end_date)
+    all_records = ParkingRecord.objects.filter(entry_time__date__gte=period_start_date, entry_time__date__lt=period_end_date)
+    all_detections = PlateDetectionHistory.objects.filter(timestamp__date__gte=period_start_date, timestamp__date__lt=period_end_date)
+
+    total_users = all_users.count()
+    total_admins = all_users.filter(role='admin').count()
+    total_drivers = all_users.filter(role='driver').count()
+    verified_users = all_users.filter(verified_status=True).count()
+    verification_rate = round((verified_users / total_users) * 100, 1) if total_users else 0.0
+
+    total_parking_sessions = all_records.count()
+    active_sessions = all_records.filter(exit_time__isnull=True).count()
+    completed_sessions = total_parking_sessions - active_sessions
+
+    total_detections = all_detections.count()
+    avg_confidence = all_detections.aggregate(avg=Avg('confidence')).get('avg') or 0.0
+
+    completed_records = all_records.filter(exit_time__isnull=False).only(
+        'entry_time',
+        'exit_time',
+        'slot_id',
+        'vehicle_type',
+        'fee_billing_unit',
+        'fee_rate',
+    )
+    total_revenue = Decimal('0.00')
+    period_revenue = Decimal('0.00')
+    slot_duration_totals = {}
+
+    for record in completed_records.iterator():
+        fee_info = _calculate_parking_fee_for_record(record)
+        total_revenue += fee_info['fee']
+
+        exit_time = record.exit_time
+        if exit_time is None:
+            continue
+
+        if period_start_date <= timezone.localtime(exit_time).date() < period_end_date:
+            period_revenue += fee_info['fee']
+
+        slot_key = (record.slot_id or '').strip() or 'Unknown'
+        slot_stats = slot_duration_totals.setdefault(slot_key, {'total_seconds': 0, 'count': 0})
+        duration_seconds = max(0, int((exit_time - record.entry_time).total_seconds()))
+        slot_stats['total_seconds'] += duration_seconds
+        slot_stats['count'] += 1
+
+    chart_labels = []
+    parking_series = []
+    detection_series = []
+
+    if stats_period == 'day':
+        parking_hour_map = {
+            int(item['hour']): int(item['total'])
+            for item in all_records.annotate(hour=ExtractHour('entry_time')).values('hour').annotate(total=Count('id'))
+            if item['hour'] is not None
+        }
+        detection_hour_map = {
+            int(item['hour']): int(item['total'])
+            for item in all_detections.annotate(hour=ExtractHour('timestamp')).values('hour').annotate(total=Count('id'))
+            if item['hour'] is not None
+        }
+        chart_labels = [f"{hour:02d}:00" for hour in range(24)]
+        parking_series = [parking_hour_map.get(hour, 0) for hour in range(24)]
+        detection_series = [detection_hour_map.get(hour, 0) for hour in range(24)]
+    elif stats_period == 'month':
+        month_days = []
+        current_day = period_start_date
+        while current_day < period_end_date:
+            month_days.append(current_day)
+            current_day += timedelta(days=1)
+
+        parking_daily_map = {
+            item['day']: int(item['total'])
+            for item in all_records.annotate(day=TruncDate('entry_time')).values('day').annotate(total=Count('id'))
+        }
+        detection_daily_map = {
+            item['day']: int(item['total'])
+            for item in all_detections.annotate(day=TruncDate('timestamp')).values('day').annotate(total=Count('id'))
+        }
+        chart_labels = [day.strftime('%d') for day in month_days]
+        parking_series = [parking_daily_map.get(day, 0) for day in month_days]
+        detection_series = [detection_daily_map.get(day, 0) for day in month_days]
+    else:
+        parking_month_map = {
+            int(item['month']): int(item['total'])
+            for item in all_records.annotate(month=ExtractMonth('entry_time')).values('month').annotate(total=Count('id'))
+            if item['month'] is not None
+        }
+        detection_month_map = {
+            int(item['month']): int(item['total'])
+            for item in all_detections.annotate(month=ExtractMonth('timestamp')).values('month').annotate(total=Count('id'))
+            if item['month'] is not None
+        }
+        chart_labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        parking_series = [parking_month_map.get(month, 0) for month in range(1, 13)]
+        detection_series = [detection_month_map.get(month, 0) for month in range(1, 13)]
+
+    peak_hours_map = {
+        int(item['hour']): int(item['total'])
+        for item in all_records.annotate(hour=ExtractHour('entry_time'))
+        .values('hour')
+        .annotate(total=Count('id'))
+        if item['hour'] is not None
+    }
+    peak_hour_labels = [f"{hour:02d}:00" for hour in range(24)]
+    peak_hour_series = [peak_hours_map.get(hour, 0) for hour in range(24)]
+
+    plate_type_items = list(
+        all_detections.values('plate_type')
+        .annotate(total=Count('id'))
+        .order_by('-total')
+    )
+    plate_type_labels = [str(item['plate_type'] or 'Unknown').replace('_', ' ') for item in plate_type_items]
+    plate_type_series = [int(item['total']) for item in plate_type_items]
+
+    confidence_bands = {
+        'High (>= 0.80)': all_detections.filter(confidence__gte=0.80).count(),
+        'Medium (0.50 - 0.79)': all_detections.filter(confidence__gte=0.50, confidence__lt=0.80).count(),
+        'Low (< 0.50)': all_detections.filter(confidence__lt=0.50).count(),
+    }
+
+    top_slots_raw = list(
+        all_records.exclude(slot_id='')
+        .values('slot_id')
+        .annotate(total_sessions=Count('id'))
+        .order_by('-total_sessions')[:6]
+    )
+    top_slots = []
+    for item in top_slots_raw:
+        slot_id = (item['slot_id'] or '').strip() or 'Unknown'
+        duration_data = slot_duration_totals.get(slot_id, {'total_seconds': 0, 'count': 0})
+        avg_minutes = 0
+        if duration_data['count'] > 0:
+            avg_minutes = int(round((duration_data['total_seconds'] / duration_data['count']) / 60.0))
+
+        top_slots.append({
+            'slot_id': slot_id,
+            'total_sessions': int(item['total_sessions']),
+            'avg_minutes': avg_minutes,
+        })
+
+    occupancy_snapshot = _parking_server_runtime.snapshot()
+    occupancy_meta = occupancy_snapshot.get('latest_meta') or {}
+    occupancy_stats = occupancy_meta.get('occupancy_stats') or {
+        'total': len(_get_parking_layout_spaces()),
+        'occupied': 0,
+        'available': len(_get_parking_layout_spaces()),
+    }
+    occupancy_rate = 0.0
+    if occupancy_stats['total']:
+        occupancy_rate = round((int(occupancy_stats['occupied']) / int(occupancy_stats['total'])) * 100, 1)
+
+    if stats_period == 'day':
+        trend_chip_label = 'Hourly view'
+        period_display_label = f"Day: {selected_day}"
+    elif stats_period == 'month':
+        trend_chip_label = 'Daily view'
+        period_display_label = f"Month: {selected_month}"
+    else:
+        trend_chip_label = 'Monthly view'
+        period_display_label = f"Year: {selected_year}"
+
+    context = {
+        'summary': {
+            'total_users': total_users,
+            'total_admins': total_admins,
+            'total_drivers': total_drivers,
+            'verified_users': verified_users,
+            'verification_rate': verification_rate,
+            'total_parking_sessions': total_parking_sessions,
+            'active_sessions': active_sessions,
+            'completed_sessions': completed_sessions,
+            'total_detections': total_detections,
+            'avg_confidence': round(float(avg_confidence), 3),
+            'total_revenue': float(total_revenue),
+            'today_revenue': float(period_revenue),
+            'occupancy_total': int(occupancy_stats.get('total', 0) or 0),
+            'occupancy_occupied': int(occupancy_stats.get('occupied', 0) or 0),
+            'occupancy_available': int(occupancy_stats.get('available', 0) or 0),
+            'occupancy_rate': occupancy_rate,
+        },
+        'charts': {
+            'daily_trends': {
+                'labels': chart_labels,
+                'parking_series': parking_series,
+                'detection_series': detection_series,
+            },
+            'plate_type_distribution': {
+                'labels': plate_type_labels,
+                'series': plate_type_series,
+            },
+            'peak_hours': {
+                'labels': peak_hour_labels,
+                'series': peak_hour_series,
+            },
+            'confidence_bands': {
+                'labels': list(confidence_bands.keys()),
+                'series': [int(value) for value in confidence_bands.values()],
+            },
+        },
+        'top_slots': top_slots,
+        'as_of_time': now_local,
+        'stats_period': stats_period,
+        'stats_day': selected_day,
+        'stats_month': selected_month,
+        'stats_year': selected_year,
+        'trend_chip_label': trend_chip_label,
+        'period_display_label': period_display_label,
+    }
+
+    return render(request, 'dashboards/system_stats.html', context)
 
 
 def plate_detection_history(request):
@@ -1393,22 +2492,109 @@ def plate_detection_history(request):
     search_query = request.GET.get('plate', '').strip()
     timestamp_query = request.GET.get('timestamp', '').strip()
     plate_type_query = request.GET.get('plate_type', '').strip()
+    period = request.GET.get('period', '').strip().lower() or 'day'
+    day_value = request.GET.get('day', '').strip()
+    month_value = request.GET.get('month', '').strip()
+    year_value = request.GET.get('year', '').strip()
+    has_explicit_period_filter = any([
+        request.GET.get('period'),
+        request.GET.get('day'),
+        request.GET.get('month'),
+        request.GET.get('year'),
+        request.GET.get('timestamp'),
+    ])
+
+    if timestamp_query and not day_value:
+        day_value = timestamp_query.split(' ')[0].split('T')[0]
+        period = 'day'
+
+    if period not in {'day', 'month', 'year'}:
+        period = 'day'
+
+    today = timezone.localdate()
+    if period == 'day' and not day_value and not month_value and not year_value:
+        day_value = today.isoformat()
+    if period == 'month' and not month_value:
+        month_value = today.strftime('%Y-%m')
+    if period == 'year' and not year_value:
+        year_value = str(today.year)
 
     records = PlateDetectionHistory.objects.all().order_by('-timestamp')
     if search_query:
         records = records.filter(license_plate_text__icontains=search_query)
-    if timestamp_query:
-        normalized_timestamp = timestamp_query.replace('T', ' ')
-        records = records.filter(timestamp__startswith=normalized_timestamp)
+    records_base = records
+
+    selected_day = ''
+    selected_month = ''
+    selected_year = ''
+
+    if period == 'day':
+        try:
+            parsed_date = datetime.strptime(day_value, '%Y-%m-%d').date() if day_value else today
+            records = records.filter(timestamp__date=parsed_date)
+            selected_day = parsed_date.isoformat()
+        except ValueError:
+            messages.warning(request, 'Invalid date filter. Please use YYYY-MM-DD.')
+            selected_day = today.isoformat()
+            records = records.filter(timestamp__date=today)
+
+        if not has_explicit_period_filter and not records.exists():
+            latest_timestamp = records_base.values_list('timestamp', flat=True).first()
+            if latest_timestamp is not None:
+                fallback_day = timezone.localtime(latest_timestamp).date()
+                selected_day = fallback_day.isoformat()
+                records = records_base.filter(timestamp__date=fallback_day)
+    elif period == 'month':
+        try:
+            parsed_month = datetime.strptime(month_value, '%Y-%m').date() if month_value else today.replace(day=1)
+            records = records.filter(timestamp__year=parsed_month.year, timestamp__month=parsed_month.month)
+            selected_month = parsed_month.strftime('%Y-%m')
+        except ValueError:
+            messages.warning(request, 'Invalid month filter. Please use YYYY-MM.')
+            fallback_month = today.strftime('%Y-%m')
+            parsed_month = datetime.strptime(fallback_month, '%Y-%m').date()
+            selected_month = fallback_month
+            records = records.filter(timestamp__year=parsed_month.year, timestamp__month=parsed_month.month)
+    else:
+        try:
+            parsed_year = int(year_value) if year_value else today.year
+            if parsed_year < 2000 or parsed_year > 2100:
+                raise ValueError()
+            records = records.filter(timestamp__year=parsed_year)
+            selected_year = str(parsed_year)
+        except ValueError:
+            messages.warning(request, 'Invalid year filter. Please use a valid year.')
+            selected_year = str(today.year)
+            records = records.filter(timestamp__year=today.year)
+
+    if not selected_day:
+        selected_day = today.isoformat()
+    if not selected_month:
+        selected_month = today.strftime('%Y-%m')
+    if not selected_year:
+        selected_year = str(today.year)
+
     if plate_type_query:
         records = records.filter(plate_type=plate_type_query)
 
+    paginator = Paginator(records, 10)
+    page_number = request.GET.get('page', 1)
+    records_page = paginator.get_page(page_number)
+
+    query_params = request.GET.copy()
+    query_params.pop('page', None)
+
     return render(request, 'dashboards/plate_detection_history.html', {
-        'records': records,
+        'records': records_page,
         'search_query': search_query,
-        'timestamp_query': timestamp_query,
+        'timestamp_query': selected_day,
         'plate_type_query': plate_type_query,
         'plate_type_options': PLATE_TYPE_OPTIONS,
+        'period': period,
+        'day_value': selected_day,
+        'month_value': selected_month,
+        'year_value': selected_year,
+        'query_string': query_params.urlencode(),
     })
 
 
@@ -1466,19 +2652,77 @@ def delete_plate_detection_history(request, record_id):
 
 def user_dashboard(request):
     """Display the user dashboard for drivers."""
-    # Check if user is logged in
-    if not request.session.get('user_id'):
-        return redirect('login')
-    
-    # Enforce email verification
-    guard = _check_verified(request)
+    guard = _driver_guard_or_redirect(request)
     if guard:
         return guard
     
     # Get user info from session
     username = request.session.get('username', 'User')
+
+    layout_slot_ids = [
+        (space.get('id') or '').strip()
+        for space in _get_parking_layout_spaces()
+        if (space.get('id') or '').strip()
+    ]
+    historic_slot_ids = list(
+        ParkingRecord.objects.exclude(slot_id='').values_list('slot_id', flat=True).distinct()
+    )
+    slot_ids = sorted(set(layout_slot_ids + historic_slot_ids))
     
     context = {
         'username': username,
+        'slot_ids': slot_ids,
     }
     return render(request, 'dashboards/user_dashboard.html', context)
+
+
+def user_slot_tracking_status(request):
+    """Return latest tracking details for a selected parking slot for drivers."""
+    if not request.session.get('user_id'):
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+
+    guard = _check_verified(request)
+    if guard:
+        return JsonResponse({'error': 'Verification required'}, status=403)
+
+    slot_id = request.GET.get('slot_id', '').strip()
+    if not slot_id:
+        return JsonResponse({'error': 'slot_id is required'}, status=400)
+
+    active_record = ParkingRecord.objects.filter(
+        slot_id=slot_id,
+        exit_time__isnull=True,
+    ).order_by('-entry_time').first()
+
+    if active_record is not None:
+        return JsonResponse({
+            'slot_id': slot_id,
+            'status': 'In Progress',
+            'start_time': _iso_or_none(active_record.entry_time),
+            'end_time': None,
+            'duration': _format_duration_seconds(active_record.entry_time),
+            'session_id': active_record.session_id,
+            'vehicle_id': active_record.vehicle_display,
+        })
+
+    latest_record = ParkingRecord.objects.filter(slot_id=slot_id).order_by('-entry_time').first()
+    if latest_record is not None:
+        return JsonResponse({
+            'slot_id': slot_id,
+            'status': 'Completed',
+            'start_time': _iso_or_none(latest_record.entry_time),
+            'end_time': _iso_or_none(latest_record.exit_time),
+            'duration': _format_duration_seconds(latest_record.entry_time, latest_record.exit_time),
+            'session_id': latest_record.session_id,
+            'vehicle_id': latest_record.vehicle_display,
+        })
+
+    return JsonResponse({
+        'slot_id': slot_id,
+        'status': 'No Records',
+        'start_time': None,
+        'end_time': None,
+        'duration': '-',
+        'session_id': '-',
+        'vehicle_id': 'Not Detected',
+    })

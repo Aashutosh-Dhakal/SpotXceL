@@ -35,7 +35,7 @@
                 <div class="header-content">
                     <div class="header-text">
                         <h1><i class="fas fa-user-circle"></i>Profile Settings</h1>
-                        <p>Manage your account information, security, and vehicle details</p>
+                        <p>Manage your account information and security</p>
                     </div>
                     <a href="{% if request.session.role == 'admin' %}{% url 'parking_monitoring' %}{% else %}{% url 'user_dashboard' %}{% endif %}" class="btn-back-home">
                         <i class="fas fa-tachometer-alt"></i>
@@ -89,9 +89,8 @@
                                 <label for="email">Email Address</label>
                                 <div class="input-wrapper">
                                     <i class="fas fa-envelope input-icon"></i>
-                                    <input type="email" id="email" name="email" 
-                                           placeholder="your.email@example.com" 
-                                           value="{{ user.email }}" required>
+                                    <input type="email" id="email" 
+                                           value="{{ user.email }}" disabled>
                                 </div>
                             </div>
                         </div>
@@ -125,31 +124,6 @@
                     </div>
                 </div>
 
-                <!-- Vehicles Section -->
-                <div class="section-label">
-                    <i class="fas fa-car"></i>
-                    <h2>Registered Vehicles</h2>
-                    <div class="section-label-line"></div>
-                </div>
-
-                <div class="vehicles-card">
-                    <div class="card-header">
-                        <div>
-                            <h3><i class="fas fa-car"></i> Your Vehicles</h3>
-                            <p>Manage your registered vehicles for parking</p>
-                        </div>
-                        <button type="button" class="btn-add-vehicle" id="addVehicleBtn">
-                            <i class="fas fa-plus-circle"></i>
-                            <span>Add Vehicle</span>
-                        </button>
-                    </div>
-                    <div class="card-body">
-                        <div class="vehicles-list" id="vehiclesList">
-                            <!-- Vehicles will be added dynamically -->
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Form Actions -->
                 <div class="form-actions">
                     <button type="button" class="btn-cancel" onclick="resetForm()">
@@ -162,21 +136,45 @@
                     </button>
                 </div>
             </form>
+
+            <div class="danger-zone-card">
+                <div class="danger-zone">
+                    <div class="danger-zone-header">
+                        <h3><i class="fas fa-exclamation-triangle"></i> Danger Zone</h3>
+                        <p>Deleting your account is permanent and cannot be undone.</p>
+                    </div>
+                    <form method="POST" action="{% url 'delete_account' %}" id="delete-account-form">
+                        {% csrf_token %}
+                        <button type="submit" class="btn-delete-account" id="delete-account-btn">
+                            <i class="fas fa-trash-alt"></i>
+                            Delete Account
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <div id="deleteAccountModal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>Confirm Delete</h3>
+                        <button class="modal-close" type="button" id="closeDeleteAccountModalBtn">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="modal-icon">
+                            <i class="fas fa-exclamation-triangle"></i>
+                        </div>
+                        <p>Are you sure you want to permanently delete your account? This action cannot be undone.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn-cancel-modal" type="button" id="cancelDeleteAccountBtn">Cancel</button>
+                        <button class="btn-delete-modal" type="button" id="confirmDeleteAccountBtn">Delete Account</button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 {% endblock %}
 
 {% block extra_js %}
     <script src="{% static 'accounts/profile.js' %}"></script>
-    <script>
-        // Auto-close server-side alert messages after 5 seconds
-        document.addEventListener('DOMContentLoaded', function() {
-            const serverAlerts = document.querySelectorAll('.alert-card');
-            serverAlerts.forEach(alert => {
-                setTimeout(() => {
-                    alert.style.display = 'none';
-                }, 5000);
-            });
-        });
-    </script>
 {% endblock %}

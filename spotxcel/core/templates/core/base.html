@@ -5,6 +5,7 @@
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>{% block title %}SpotXceL - Smart Parking System{% endblock %}</title>
+    <link rel="icon" type="image/x-icon" href="{% static 'core/favicon.ico' %}"/>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet"/>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"/>
     <link href="{% static 'core/base.css' %}" rel="stylesheet"/>
@@ -18,7 +19,7 @@
     </main>
     
     {% include 'core/footer.html' %}
-    
+    <script src="{% static 'core/base.js' %}"></script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

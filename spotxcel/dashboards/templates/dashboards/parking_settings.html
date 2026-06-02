@@ -1,0 +1,187 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block title %}Parking Settings - SpotXceL{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'dashboards/parking_records.css' %}">
+    <link rel="stylesheet" href="{% static 'dashboards/parking_settings.css' %}">
+{% endblock %}
+
+{% block content %}
+    <div class="container">
+        {% if messages %}
+            {% for message in messages %}
+            <div class="alert-card {% if message.tags %}alert-{{ message.tags }}{% else %}alert-info{% endif %}">
+                {% if message.tags == 'success' %}
+                    <i class="fas fa-check-circle alert-icon"></i>
+                {% elif message.tags == 'warning' %}
+                    <i class="fas fa-exclamation-triangle alert-icon"></i>
+                {% elif message.tags == 'error' %}
+                    <i class="fas fa-exclamation-circle alert-icon"></i>
+                {% else %}
+                    <i class="fas fa-info-circle alert-icon"></i>
+                {% endif %}
+                <div class="alert-content">
+                    <p class="alert-message">{{ message }}</p>
+                </div>
+                <button class="alert-close" onclick="this.parentElement.style.display='none'"><i class="fas fa-times"></i></button>
+            </div>
+            {% endfor %}
+        {% endif %}
+
+        <div class="nav-tabs">
+            <a href="{% url 'parking_monitoring' %}" class="nav-tab">
+                <i class="fas fa-camera"></i>
+                <span>Parking Lot Monitoring</span>
+            </a>
+            <a href="{% url 'user_management' %}" class="nav-tab">
+                <i class="fas fa-users"></i>
+                <span>User Management System</span>
+            </a>
+            <a href="{% url 'parking_records' %}" class="nav-tab">
+                <i class="fas fa-clock"></i>
+                <span>Parking Records</span>
+            </a>
+            <a href="{% url 'plate_detection_history' %}" class="nav-tab">
+                <i class="fas fa-id-card"></i>
+                <span>Plate Detection History</span>
+            </a>
+            <a href="{% url 'parking_settings' %}" class="nav-tab active">
+                <i class="fas fa-coins"></i>
+                <span>Parking Settings</span>
+            </a>
+            <a href="{% url 'system_stats' %}" class="nav-tab">
+                <i class="fas fa-chart-line"></i>
+                <span>System Stats</span>
+            </a>
+        </div>
+
+        <div class="page-header">
+            <div>
+                <h1>Parking Settings</h1>
+                <p>Set separate fee allocation for car and motorbike vehicles, plus detector confidence thresholds.</p>
+            </div>
+        </div>
+
+        <form method="POST" action="{% url 'parking_settings' %}" class="parking-settings-form">
+            {% csrf_token %}
+            <div class="parking-settings-grid">
+                <section class="settings-card">
+                    <div class="settings-section-header">
+                        <h2>Fee Allocation</h2>
+                        <p>Car and van share the same billing rules under Car. Motorbike has its own separate billing rules. Sessions are always charged at least 1 selected unit.</p>
+                    </div>
+                    <div class="vehicle-fee-grid">
+                        {% for item in vehicle_fee_configs %}
+                        <article class="vehicle-fee-card">
+                            <div class="vehicle-fee-card-header">
+                                <h3>{{ item.vehicle_label }}</h3>
+                                <span class="vehicle-fee-chip">Active config</span>
+                            </div>
+                            <div class="filter-grid parking-fee-grid">
+                                <div class="filter-item">
+                                    <label for="{{ item.vehicle_type }}_billing_unit">Billing Unit</label>
+                                    <div class="input-with-icon">
+                                        <i class="fas fa-hourglass-half"></i>
+                                        <select id="{{ item.vehicle_type }}_billing_unit" name="{{ item.vehicle_type }}_billing_unit" required>
+                                            {% for value, label in unit_choices %}
+                                                <option value="{{ value }}" {% if item.config and item.config.billing_unit == value %}selected{% endif %}>{{ label }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="filter-item">
+                                    <label for="{{ item.vehicle_type }}_rate">Rate (Rs per Unit)</label>
+                                    <div class="input-with-icon">
+                                        <i class="fas fa-rupee-sign"></i>
+                                        <input id="{{ item.vehicle_type }}_rate" name="{{ item.vehicle_type }}_rate" type="number" min="0" step="0.01" required value="{% if item.config %}{{ item.config.rate }}{% else %}0.00{% endif %}">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="fee-summary-row">
+                                <span>Current:</span>
+                                <strong>
+                                    {% if item.config %}
+                                        {{ item.config.rate }} Rs / {% if item.config.billing_unit == 'minute' %}Minute{% elif item.config.billing_unit == 'hour' %}Hour{% elif item.config.billing_unit == 'day' %}Day{% else %}Month{% endif %}
+                                    {% else %}
+                                        0.00 Rs / Hour
+                                    {% endif %}
+                                </strong>
+                            </div>
+                        </article>
+                        {% endfor %}
+                    </div>
+                </section>
+
+                <section class="settings-card settings-card-accent">
+                    <div class="settings-section-header">
+                        <h2>Detection Confidence</h2>
+                        <p>Lower values detect more objects but may increase false positives.</p>
+                    </div>
+                    <div class="filter-grid confidence-grid">
+                        <div class="filter-item">
+                            <label for="plate_detection_confidence">Plate Detection Model</label>
+                            <div class="input-with-icon">
+                                <i class="fas fa-id-card"></i>
+                                <input
+                                    id="plate_detection_confidence"
+                                    name="plate_detection_confidence"
+                                    type="number"
+                                    min="0"
+                                    max="1"
+                                    step="0.01"
+                                    required
+                                    value="{% if confidence_config %}{{ confidence_config.plate_detection_confidence|floatformat:2 }}{% else %}0.25{% endif %}"
+                                >
+                            </div>
+                        </div>
+
+                        <div class="filter-item">
+                            <label for="parking_detection_confidence">Vehicle Detection Model</label>
+                            <div class="input-with-icon">
+                                <i class="fas fa-car"></i>
+                                <input
+                                    id="parking_detection_confidence"
+                                    name="parking_detection_confidence"
+                                    type="number"
+                                    min="0"
+                                    max="1"
+                                    step="0.01"
+                                    required
+                                    value="{% if confidence_config %}{{ confidence_config.parking_detection_confidence|floatformat:2 }}{% else %}0.50{% endif %}"
+                                >
+                            </div>
+                        </div>
+
+                        <div class="confidence-summary">
+                            <label>Current Defaults</label>
+                            <div class="confidence-summary-chip">
+                                <span>Plate</span>
+                                <strong>{% if confidence_config %}{{ confidence_config.plate_detection_confidence|floatformat:2 }}{% else %}0.25{% endif %}</strong>
+                            </div>
+                            <div class="confidence-summary-chip">
+                                <span>Vehicle</span>
+                                <strong>{% if confidence_config %}{{ confidence_config.parking_detection_confidence|floatformat:2 }}{% else %}0.50{% endif %}</strong>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <div class="settings-actions-bar">
+                <p class="fee-hint">
+                    Billing rule: if session duration is less than 1 selected unit, the system charges for exactly 1 unit.
+                </p>
+                <div class="settings-actions-right">
+                    <button type="submit" class="btn-filter btn-save-settings">
+                        <i class="fas fa-save"></i>
+                        Save Settings
+                    </button>
+                </div>
+            </div>
+        </form>
+        </div>
+    </div>
+{% endblock %}

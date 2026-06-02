@@ -289,6 +289,135 @@
     border-color: #10B981;
 }
 
+/* ---- Confirmation Modal ---- */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+.modal.show {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background: #fff;
+    border-radius: 4px;
+    width: 90%;
+    max-width: 440px;
+    border: 1px solid #E5E7EB;
+    overflow: hidden;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid #E5E7EB;
+    background: #FAFAFA;
+}
+
+.modal-header h3 {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: #1F2937;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: #9CA3AF;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+    transition: background-color 0.15s, color 0.15s;
+}
+
+.modal-close:hover {
+    background: #F3F4F6;
+    color: #1F2937;
+}
+
+.modal-body {
+    padding: 28px 24px;
+    text-align: center;
+}
+
+.modal-icon {
+    width: 52px;
+    height: 52px;
+    margin: 0 auto 16px;
+    background: #FFF7ED;
+    border: 1px solid #FFEDD5;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-icon i {
+    font-size: 1.5rem;
+    color: #F59E0B;
+}
+
+.modal-body p {
+    margin: 0;
+    font-size: 0.875rem;
+    color: #6B7280;
+    line-height: 1.5;
+}
+
+.modal-footer {
+    display: flex;
+    gap: 10px;
+    padding: 16px 24px;
+    border-top: 1px solid #E5E7EB;
+    background: #FAFAFA;
+}
+
+.btn-cancel-modal,
+.btn-delete-modal {
+    flex: 1;
+    padding: 9px 20px;
+    border-radius: 3px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.15s;
+    border: none;
+}
+
+.btn-cancel-modal {
+    background: #fff;
+    color: #6B7280;
+    border: 1px solid #D1D5DB;
+}
+
+.btn-cancel-modal:hover {
+    background: #F9FAFB;
+}
+
+.btn-delete-modal {
+    background: #EF4444;
+    color: #fff;
+}
+
+.btn-delete-modal:hover {
+    background: #DC2626;
+}
+
 .input-hint {
     font-size: 0.75rem;
     color: #9CA3AF;
@@ -415,6 +544,73 @@
 
 .btn-add-vehicle i {
     font-size: 0.8125rem;
+}
+
+/* ---- Danger Zone ---- */
+.danger-zone-card {
+    margin-top: 18px;
+    padding: 16px;
+    background: #fff;
+    border: 1px solid #E5E7EB;
+    border-radius: 4px;
+}
+
+.danger-zone {
+    padding: 16px 20px;
+    border: 1px solid #FECACA;
+    background: #FEF2F2;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.danger-zone-header {
+    margin: 0;
+}
+
+.danger-zone-header h3 {
+    margin: 0 0 4px;
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: #B91C1C;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.danger-zone-header p {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: #7F1D1D;
+}
+
+#delete-account-form {
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.btn-delete-account {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-width: 148px;
+    padding: 10px 16px;
+    border: 1px solid #DC2626;
+    background: #DC2626;
+    color: #fff;
+    border-radius: 3px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.15s, border-color 0.15s;
+}
+
+.btn-delete-account:hover {
+    background: #B91C1C;
+    border-color: #B91C1C;
 }
 
 .btn-remove-vehicle {
@@ -554,5 +750,19 @@
     .btn-save {
         width: 100%;
         justify-content: center;
+    }
+    .danger-zone {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+    .danger-zone-card {
+        padding: 12px;
+    }
+    #delete-account-form {
+        width: 100%;
+    }
+    .btn-delete-account {
+        width: 100%;
     }
 }

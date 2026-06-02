@@ -1,0 +1,137 @@
+.denied-wrap {
+    min-height: calc(100vh - 170px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 24px;
+}
+
+.denied-card {
+    width: min(860px, 100%);
+    background: linear-gradient(180deg, #FFFFFF 0%, #FCFCFD 100%);
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+    text-align: center;
+    padding: 56px 42px 44px;
+    box-shadow: 0 7px 16px rgba(17, 24, 39, 0.07);
+}
+
+.denied-icon {
+    width: 94px;
+    height: 94px;
+    border-radius: 999px;
+    background: #FFF7ED;
+    border: 1px solid #FFEDD5;
+    color: #EA580C;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 42px;
+    margin-bottom: 20px;
+}
+
+.denied-title {
+    margin: 0;
+    font-size: clamp(2rem, 4vw, 2.75rem);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    font-weight: 800;
+}
+
+.denied-title-dark {
+    color: #111827;
+}
+
+.denied-title-accent {
+    color: #EA580C;
+}
+
+.denied-title::after {
+    content: '';
+    display: block;
+    width: 64px;
+    height: 3px;
+    background: #EA580C;
+    border-radius: 0;
+    margin: 14px auto 0;
+}
+
+.denied-message {
+    max-width: 700px;
+    margin: 24px auto 0;
+    color: #4B5563;
+    font-size: 0.97rem;
+    line-height: 1.75;
+}
+
+.denied-actions {
+    margin-top: 32px;
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.btn-primary-action {
+    min-width: 210px;
+    border-radius: 3px;
+    text-decoration: none;
+    padding: 11px 22px;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: background-color 0.15s, border-color 0.15s;
+}
+
+.btn-primary-action {
+    color: #fff;
+    background: #EA580C;
+    border: 1px solid #EA580C;
+}
+
+.btn-primary-action:hover {
+    background: #C2410C;
+    border-color: #C2410C;
+}
+
+.denied-footer {
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid #E5E7EB;
+    color: #9CA3AF;
+    font-size: 0.8125rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+@media (max-width: 640px) {
+    .denied-card {
+        padding: 36px 20px 28px;
+    }
+
+    .denied-icon {
+        width: 82px;
+        height: 82px;
+        font-size: 34px;
+        margin-bottom: 18px;
+    }
+
+    .denied-message {
+        font-size: 0.9rem;
+        line-height: 1.6;
+        margin-top: 18px;
+    }
+
+    .btn-primary-action {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .denied-footer {
+        font-size: 0.9rem;
+    }
+}

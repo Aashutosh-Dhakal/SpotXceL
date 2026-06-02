@@ -1,0 +1,214 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block title %}System Stats - SpotXceL{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'dashboards/parking_records.css' %}">
+    <link rel="stylesheet" href="{% static 'dashboards/system_stats.css' %}">
+{% endblock %}
+
+{% block content %}
+    <div class="container">
+        <div class="nav-tabs">
+            <a href="{% url 'parking_monitoring' %}" class="nav-tab">
+                <i class="fas fa-camera"></i>
+                <span>Parking Lot Monitoring</span>
+            </a>
+            <a href="{% url 'user_management' %}" class="nav-tab">
+                <i class="fas fa-users"></i>
+                <span>User Management System</span>
+            </a>
+            <a href="{% url 'parking_records' %}" class="nav-tab">
+                <i class="fas fa-clock"></i>
+                <span>Parking Records</span>
+            </a>
+            <a href="{% url 'plate_detection_history' %}" class="nav-tab">
+                <i class="fas fa-id-card"></i>
+                <span>Plate Detection History</span>
+            </a>
+            <a href="{% url 'parking_settings' %}" class="nav-tab">
+                <i class="fas fa-coins"></i>
+                <span>Parking Settings</span>
+            </a>
+            <a href="{% url 'system_stats' %}" class="nav-tab active">
+                <i class="fas fa-chart-line"></i>
+                <span>System Stats</span>
+            </a>
+        </div>
+
+        <div class="page-header">
+            <div>
+                <h1>System Stats</h1>
+                <p>Operational analytics overview for users, parking activity, detections, and occupancy.</p>
+            </div>
+            <button id="export-system-stats" class="btn-export">
+                <i class="fas fa-file-export"></i>
+                Export Snapshot
+            </button>
+        </div>
+
+        <div class="filter-card stats-filter-card">
+            <form method="GET" action="{% url 'system_stats' %}">
+                <div class="filter-grid stats-filter-grid">
+                    <div class="filter-item">
+                        <label for="stats-period">Stats Period</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-calendar"></i>
+                            <select id="stats-period" name="period">
+                                <option value="day" {% if stats_period == 'day' %}selected{% endif %}>Specific Day</option>
+                                <option value="month" {% if stats_period == 'month' %}selected{% endif %}>Specific Month</option>
+                                <option value="year" {% if stats_period == 'year' %}selected{% endif %}>Specific Year</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="filter-item period-input stats-period-day {% if stats_period != 'day' %}hidden{% endif %}">
+                        <label for="stats-day">Day</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-calendar-day"></i>
+                            <input type="date" id="stats-day" name="day" value="{{ stats_day }}">
+                        </div>
+                    </div>
+
+                    <div class="filter-item period-input stats-period-month {% if stats_period != 'month' %}hidden{% endif %}">
+                        <label for="stats-month">Month</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-calendar"></i>
+                            <input type="month" id="stats-month" name="month" value="{{ stats_month }}">
+                        </div>
+                    </div>
+
+                    <div class="filter-item period-input stats-period-year {% if stats_period != 'year' %}hidden{% endif %}">
+                        <label for="stats-year">Year</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-calendar"></i>
+                            <input type="number" min="2000" max="2100" id="stats-year" name="year" value="{{ stats_year }}" placeholder="YYYY">
+                        </div>
+                    </div>
+
+                    <div class="filter-actions">
+                        <button type="submit" class="btn-filter">
+                            <i class="fas fa-filter"></i>
+                            Apply
+                        </button>
+                        <a class="btn-clear" href="{% url 'system_stats' %}">Reset</a>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <section class="stats-grid">
+            <article class="stat-tile">
+                <div class="stat-tile-label">Total Users</div>
+                <div class="stat-tile-value">{{ summary.total_users }}</div>
+                <div class="stat-tile-meta">{{ summary.total_admins }} admin / {{ summary.total_drivers }} driver</div>
+            </article>
+            <article class="stat-tile">
+                <div class="stat-tile-label">Verified Accounts</div>
+                <div class="stat-tile-value">{{ summary.verified_users }}</div>
+                <div class="stat-tile-meta">{{ summary.verification_rate }}% verification rate</div>
+            </article>
+            <article class="stat-tile">
+                <div class="stat-tile-label">Parking Sessions</div>
+                <div class="stat-tile-value">{{ summary.total_parking_sessions }}</div>
+                <div class="stat-tile-meta">{{ summary.active_sessions }} active / {{ summary.completed_sessions }} completed</div>
+            </article>
+            <article class="stat-tile">
+                <div class="stat-tile-label">Plate Detections</div>
+                <div class="stat-tile-value">{{ summary.total_detections }}</div>
+                <div class="stat-tile-meta">Avg confidence: {{ summary.avg_confidence }}</div>
+            </article>
+            <article class="stat-tile">
+                <div class="stat-tile-label">Estimated Revenue</div>
+                <div class="stat-tile-value">Rs {{ summary.total_revenue|floatformat:2 }}</div>
+                <div class="stat-tile-meta">Period: Rs {{ summary.today_revenue|floatformat:2 }}</div>
+            </article>
+            <article class="stat-tile">
+                <div class="stat-tile-label">Live Occupancy</div>
+                <div class="stat-tile-value">{{ summary.occupancy_rate }}%</div>
+                <div class="stat-tile-meta">{{ summary.occupancy_occupied }}/{{ summary.occupancy_total }} occupied</div>
+            </article>
+        </section>
+
+        <section class="analytics-grid">
+            <article class="analytics-card compact-chart span-2">
+                <div class="analytics-header">
+                    <h3>Core Trend: Parking vs Detections</h3>
+                    <span class="chip">{{ trend_chip_label }}</span>
+                </div>
+                <div class="line-chart" id="daily-trends-chart"></div>
+            </article>
+
+            <article class="analytics-card">
+                <div class="analytics-header">
+                    <h3>Plate Type Distribution</h3>
+                </div>
+                <div class="donut-chart" id="plate-type-chart"></div>
+            </article>
+
+            <article class="analytics-card">
+                <div class="analytics-header">
+                    <h3>Detection Confidence Bands</h3>
+                </div>
+                <div class="bar-chart" id="confidence-chart"></div>
+            </article>
+
+            <article class="analytics-card span-2">
+                <div class="analytics-header">
+                    <h3>Session Start Peak Hours</h3>
+                    <span class="chip">24-hour distribution</span>
+                </div>
+                <div class="bar-chart compact" id="peak-hours-chart"></div>
+            </article>
+
+            <article class="analytics-card span-3">
+                <div class="analytics-header">
+                    <h3>Top Slot Utilization</h3>
+                    <span class="chip">By total sessions</span>
+                </div>
+                <div class="table-wrapper mini-table-wrapper">
+                    <table class="records-table mini-table">
+                        <thead>
+                            <tr>
+                                <th>Slot ID</th>
+                                <th>Total Sessions</th>
+                                <th>Avg Duration (min)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if top_slots %}
+                                {% for slot in top_slots %}
+                                    <tr>
+                                        <td><span class="slot-badge">{{ slot.slot_id }}</span></td>
+                                        <td>{{ slot.total_sessions }}</td>
+                                        <td>{{ slot.avg_minutes }}</td>
+                                    </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="3" class="empty-state-cell">No slot usage history available.</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </article>
+        </section>
+
+        <div class="stats-footnote">
+            <p>{{ period_display_label }} | Snapshot generated at {{ as_of_time|date:'Y-m-d H:i:s' }}.</p>
+            <p>Revenue is estimated from the currently active parking fee configuration.</p>
+        </div>
+
+        {{ charts.daily_trends|json_script:'daily-trends-data' }}
+        {{ charts.plate_type_distribution|json_script:'plate-type-data' }}
+        {{ charts.peak_hours|json_script:'peak-hours-data' }}
+        {{ charts.confidence_bands|json_script:'confidence-bands-data' }}
+        {{ summary|json_script:'summary-data' }}
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+    <script src="{% static 'dashboards/system_stats.js' %}"></script>
+{% endblock %}

@@ -43,11 +43,19 @@
             </a>
             <a href="{% url 'parking_records' %}" class="nav-tab active">
                 <i class="fas fa-clock"></i>
-                <span>Parking Records/History</span>
+                <span>Parking Records</span>
             </a>
             <a href="{% url 'plate_detection_history' %}" class="nav-tab">
                 <i class="fas fa-id-card"></i>
                 <span>Plate Detection History</span>
+            </a>
+            <a href="{% url 'parking_settings' %}" class="nav-tab">
+                <i class="fas fa-coins"></i>
+                <span>Parking Settings</span>
+            </a>
+            <a href="{% url 'system_stats' %}" class="nav-tab">
+                <i class="fas fa-chart-line"></i>
+                <span>System Stats</span>
             </a>
         </div>
 
@@ -65,29 +73,56 @@
 
         <!-- Filter Section -->
         <div class="filter-card">
-            <div class="filter-grid">
-                <div class="filter-item">
-                    <label for="vehicle-number">Vehicle Number</label>
-                    <div class="input-with-icon">
-                        <i class="fas fa-search"></i>
-                        <input type="text" id="vehicle-number" placeholder="e.g. ABC-1234">
+            <form method="GET" action="{% url 'parking_records' %}">
+                <div class="filter-grid records-filter-grid">
+                    <div class="filter-item">
+                        <label for="vehicle-number">Vehicle Number / Session / Slot</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="vehicle-number" name="vehicle" placeholder="e.g. BA 12 PA 1234" value="{{ vehicle_query }}">
+                        </div>
+                    </div>
+                    <div class="filter-item">
+                        <label for="period">Stats Period</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-calendar-alt"></i>
+                            <select id="period" name="period">
+                                <option value="day" {% if period == 'day' %}selected{% endif %}>Specific Day</option>
+                                <option value="month" {% if period == 'month' %}selected{% endif %}>Specific Month</option>
+                                <option value="year" {% if period == 'year' %}selected{% endif %}>Specific Year</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="filter-item period-input period-day {% if period != 'day' %}hidden{% endif %}">
+                        <label for="period-day">Day</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-calendar-day"></i>
+                            <input type="date" id="period-day" name="day" value="{{ day_value }}">
+                        </div>
+                    </div>
+                    <div class="filter-item period-input period-month {% if period != 'month' %}hidden{% endif %}">
+                        <label for="period-month">Month</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-calendar"></i>
+                            <input type="month" id="period-month" name="month" value="{{ month_value }}">
+                        </div>
+                    </div>
+                    <div class="filter-item period-input period-year {% if period != 'year' %}hidden{% endif %}">
+                        <label for="period-year">Year</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-calendar"></i>
+                            <input type="number" min="2000" max="2100" id="period-year" name="year" value="{{ year_value }}" placeholder="YYYY">
+                        </div>
+                    </div>
+                    <div class="filter-actions">
+                        <button class="btn-filter" type="submit">
+                            <i class="fas fa-filter"></i>
+                            Filter
+                        </button>
+                        <a class="btn-clear" href="{% url 'parking_records' %}">Clear</a>
                     </div>
                 </div>
-                <div class="filter-item">
-                    <label for="date">Date</label>
-                    <div class="input-with-icon">
-                        <i class="fas fa-calendar-alt"></i>
-                        <input type="date" id="date">
-                    </div>
-                </div>
-                <div class="filter-actions">
-                    <button class="btn-filter">
-                        <i class="fas fa-filter"></i>
-                        Filter
-                    </button>
-                    <button class="btn-clear">Clear</button>
-                </div>
-            </div>
+            </form>
         </div>
 
         <!-- Records Table -->
@@ -99,116 +134,63 @@
                             <th>Session ID</th>
                             <th>Entry Time</th>
                             <th>Exit Time</th>
+                            <th>Status</th>
                             <th>Duration</th>
+                            <th>Fee (Rs)</th>
                             <th>Slot ID</th>
+                            <th>Vehicle Type</th>
                             <th>Vehicle ID</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% comment %} <!-- Record 1 - Active -->
-                        <tr>
-                            <td>
-                                <span class="session-id">PS-2024-1001</span>
-                            </td>
-                            <td class="text-secondary">Oct 25, 14:30</td>
-                            <td class="text-secondary">-</td>
-                            <td class="duration-active">1h 15m (Active)</td>
-                            <td>
-                                <span class="slot-badge">A-102</span>
-                            </td>
-                            <td>
-                                <div class="vehicle-info">
-                                    <div class="vehicle-icon active">
-                                        <i class="fas fa-car"></i>
+                        {% if record_rows %}
+                            {% for row in record_rows %}
+                            {% with record=row.record fee_info=row.fee_info %}
+                            <tr>
+                                <td><span class="session-id">{{ record.session_id }}</span></td>
+                                <td class="text-secondary">{{ record.entry_time|date:'Y-m-d H:i:s' }}</td>
+                                <td class="text-secondary">
+                                    {% if record.exit_time %}
+                                        {{ record.exit_time|date:'Y-m-d H:i:s' }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="status-badge {% if record.is_active %}status-occupied{% else %}status-completed{% endif %}">
+                                        {% if record.is_active %}
+                                            In Progress
+                                        {% else %}
+                                            Completed
+                                        {% endif %}
+                                    </span>
+                                </td>
+                                <td class="{% if record.is_active %}duration-active{% else %}text-secondary{% endif %}">{{ record.duration_display }}</td>
+                                <td class="text-secondary">Rs {{ fee_info.fee|floatformat:2 }}</td>
+                                <td><span class="slot-badge">{{ record.slot_id }}</span></td>
+                                <td><span class="slot-badge">{{ record.vehicle_type_display }}</span></td>
+                                <td>
+                                    <div class="vehicle-info">
+                                        <div class="vehicle-icon {% if record.is_active %}active{% endif %}">
+                                            {% if record.vehicle_type == 'van' %}
+                                                <i class="fas fa-shuttle-van"></i>
+                                            {% elif record.vehicle_type == 'motor' %}
+                                                <i class="fas fa-motorcycle"></i>
+                                            {% else %}
+                                                <i class="fas fa-car"></i>
+                                            {% endif %}
+                                        </div>
+                                        <div class="vehicle-number">{{ record.vehicle_display }}</div>
                                     </div>
-                                    <div class="vehicle-number">KA-05-MV-4321</div>
-                                </div>
-                            </td>
-                        </tr>
-
-                        <!-- Record 2 - Completed -->
-                        <tr>
-                            <td>
-                                <span class="session-id">PS-2024-1002</span>
-                            </td>
-                            <td class="text-secondary">Oct 25, 10:00</td>
-                            <td class="text-secondary">Oct 25, 12:45</td>
-                            <td class="text-secondary">2h 45m</td>
-                            <td>
-                                <span class="slot-badge">B-05</span>
-                            </td>
-                            <td>
-                                <div class="vehicle-info">
-                                    <div class="vehicle-icon">
-                                        <i class="fas fa-car"></i>
-                                    </div>
-                                    <div class="vehicle-number">TN-02-AB-9988</div>
-                                </div>
-                            </td>
-                        </tr>
-
-                        <!-- Record 3 - Completed -->
-                        <tr>
-                            <td>
-                                <span class="session-id">PS-2024-1003</span>
-                            </td>
-                            <td class="text-secondary">Oct 25, 09:15</td>
-                            <td class="text-secondary">Oct 25, 10:30</td>
-                            <td class="text-secondary">1h 15m</td>
-                            <td>
-                                <span class="slot-badge">A-108</span>
-                            </td>
-                            <td>
-                                <div class="vehicle-info">
-                                    <div class="vehicle-icon">
-                                        <i class="fas fa-car"></i>
-                                    </div>
-                                    <div class="vehicle-number">MH-12-XY-1234</div>
-                                </div>
-                            </td>
-                        </tr>
-
-                        <!-- Record 4 - Completed -->
-                        <tr>
-                            <td>
-                                <span class="session-id">PS-2024-1004</span>
-                            </td>
-                            <td class="text-secondary">Oct 24, 18:00</td>
-                            <td class="text-secondary">Oct 24, 21:00</td>
-                            <td class="text-secondary">3h 00m</td>
-                            <td>
-                                <span class="slot-badge">C-305</span>
-                            </td>
-                            <td>
-                                <div class="vehicle-info">
-                                    <div class="vehicle-icon">
-                                        <i class="fas fa-car"></i>
-                                    </div>
-                                    <div class="vehicle-number">DL-08-CD-6789</div>
-                                </div>
-                            </td>
-                        </tr>
-
-                        <!-- Record 5 - Completed -->
-                        <tr>
-                            <td>
-                                <span class="session-id">PS-2024-1005</span>
-                            </td>
-                            <td class="text-secondary">Oct 24, 08:30</td>
-                            <td class="text-secondary">Oct 24, 09:30</td>
-                            <td class="text-secondary">1h 00m</td>
-                            <td>
-                                <span class="slot-badge">B-022</span>
-                            </td>
-                            <td>
-                                <div class="vehicle-info">
-                                    <div class="vehicle-icon">
-                                        <i class="fas fa-car"></i>
-                                    </div>
-                                    <div class="vehicle-number">KL-01-EF-4567</div>
-                                </div>
-                            </td>
-                        </tr> {% endcomment %}
+                                </td>
+                            </tr>
+                            {% endwith %}
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="9" class="empty-state-cell">No parking records found.</td>
+                            </tr>
+                        {% endif %}
                     </tbody>
                 </table>
             </div>
@@ -216,20 +198,35 @@
             <!-- Pagination -->
             <div class="pagination-section">
                 <div class="pagination-info">
-                    <p>Showing <span class="font-medium">1</span> to <span class="font-medium">5</span> of <span class="font-medium">128</span> results</p>
+                    <p>
+                        Showing <span class="font-medium">{{ records.start_index }}</span>
+                        to <span class="font-medium">{{ records.end_index }}</span>
+                        of <span class="font-medium">{{ records.paginator.count }}</span> results
+                    </p>
                 </div>
-                <div class="pagination-controls">
-                    <button class="pagination-btn" disabled>
-                        <i class="fas fa-chevron-left"></i>
-                    </button>
-                    <button class="pagination-btn active">1</button>
-                    <button class="pagination-btn">2</button>
-                    <button class="pagination-btn">3</button>
-                    <span class="pagination-ellipsis">...</span>
-                    <button class="pagination-btn">
-                        <i class="fas fa-chevron-right"></i>
-                    </button>
-                </div>
+                {% if records.paginator.num_pages > 1 %}
+                    <div class="pagination-controls">
+                        {% if records.has_previous %}
+                            <a class="pagination-btn" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ records.previous_page_number }}">Prev</a>
+                        {% else %}
+                            <button class="pagination-btn" disabled>Prev</button>
+                        {% endif %}
+
+                        {% for page_num in records.paginator.page_range %}
+                            {% if page_num == records.number %}
+                                <button class="pagination-btn active" disabled>{{ page_num }}</button>
+                            {% elif page_num >= records.number|add:'-2' and page_num <= records.number|add:'2' %}
+                                <a class="pagination-btn" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_num }}">{{ page_num }}</a>
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if records.has_next %}
+                            <a class="pagination-btn" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ records.next_page_number }}">Next</a>
+                        {% else %}
+                            <button class="pagination-btn" disabled>Next</button>
+                        {% endif %}
+                    </div>
+                {% endif %}
             </div>
         </div>
     </div>

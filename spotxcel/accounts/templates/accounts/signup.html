@@ -50,7 +50,7 @@
                     <label for="username">Username</label>
                     <div class="input-wrapper">
                         <i class="fas fa-user input-icon"></i>
-                        <input type="text" id="username" name="username" required/>
+                        <input type="text" id="username" name="username" value="{{ username|default:'' }}" required/>
                     </div>
                 </div>
 
@@ -58,7 +58,7 @@
                     <label for="email">Email Address</label>
                     <div class="input-wrapper">
                         <i class="fas fa-envelope input-icon"></i>
-                        <input type="email" id="email" name="email" required/>
+                        <input type="email" id="email" name="email" value="{{ email|default:'' }}" required/>
                     </div>
                 </div>
 
@@ -119,15 +119,26 @@
             <h2 id="terms-modal-title">Terms &amp; Conditions</h2>
             <div class="terms-modal-body">
                 <p>
-                    By creating an account, you agree to use this platform responsibly and in accordance with all applicable laws and regulations. You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account.
+                    By creating an account, you agree to use this platform responsibly and in accordance with all applicable laws and regulations.
+                </p>
+                <ul>
+                    <li>
+                        You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account.
+                    </li>
+                    <li>
+                        You agree not to misuse the service, including attempting unauthorized access, disrupting system operations, or using the platform for fraudulent or harmful activities.
+                    </li>
+                    <li>
+                        We reserve the right to suspend or terminate accounts that violate these terms.
+                    </li>
+                </ul>
+                <p>
+                    We may collect and use your information in accordance with our Privacy Policy to improve our services and user experience.
                 </p>
                 <p>
-                    You agree not to misuse the service, including attempting unauthorized access, disrupting system operations, or using the platform for fraudulent or harmful activities. We reserve the right to suspend or terminate accounts that violate these terms.
+                    While we strive to provide reliable and secure services, we do not guarantee uninterrupted access at all times.
                 </p>
-                <p>
-                    We may collect and use your information in accordance with our Privacy Policy to improve our services and user experience. While we strive to provide reliable and secure services, we do not guarantee uninterrupted access at all times.
-                </p>
-                <p>
+                <p class="terms-acknowledgement">
                     By continuing, you acknowledge that you have read, understood, and agreed to these Terms &amp; Conditions.
                 </p>
             </div>
@@ -138,17 +149,4 @@
 
 {% block extra_js %}
 <script src="{% static 'accounts/signup.js' %}"></script>
-<script>
-    // Auto-close server-side alert messages after 5 seconds
-    document.addEventListener('DOMContentLoaded', function() {
-        const serverAlerts = document.querySelectorAll('.alert-card');
-        serverAlerts.forEach(alert => {
-            if (alert.id !== 'alert-card') { // Skip the template alert
-                setTimeout(() => {
-                    alert.style.display = 'none';
-                }, 5000);
-            }
-        });
-    });
-</script>
 {% endblock %}

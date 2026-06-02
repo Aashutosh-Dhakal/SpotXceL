@@ -43,11 +43,19 @@
             </a>
             <a href="{% url 'parking_records' %}" class="nav-tab">
                 <i class="fas fa-clock"></i>
-                <span>Parking Records/History</span>
+                <span>Parking Records</span>
             </a>
             <a href="{% url 'plate_detection_history' %}" class="nav-tab">
                 <i class="fas fa-id-card"></i>
                 <span>Plate Detection History</span>
+            </a>
+            <a href="{% url 'parking_settings' %}" class="nav-tab">
+                <i class="fas fa-coins"></i>
+                <span>Parking Settings</span>
+            </a>
+            <a href="{% url 'system_stats' %}" class="nav-tab">
+                <i class="fas fa-chart-line"></i>
+                <span>System Stats</span>
             </a>
         </div>
 
@@ -157,8 +165,7 @@
                 <!-- Today's Revenue Card -->
                 <div class="stat-card">
                     <div class="stat-label">Today's Revenue</div>
-                    <div class="stat-value">Rs 0</div>
-                    <i class="fas fa-wallet stat-icon orange"></i>
+                    <div class="stat-value" id="todayRevenueValue">Rs {{ today_revenue|floatformat:-2 }}</div>
                     <div class="revenue-change">
                         <i class="fas fa-arrow-trend-up"></i>
                         <span>Income</span>
@@ -251,15 +258,4 @@
     <script src="{% static 'dashboards/detection_overlay.js' %}"></script>
     <script src="{% static 'dashboards/parking_editor.js' %}"></script>
     <script src="{% static 'dashboards/parking_monitoring.js' %}"></script>
-    <script>
-        // Auto-close server-side alert messages after 5 seconds
-        document.addEventListener('DOMContentLoaded', function() {
-            const serverAlerts = document.querySelectorAll('.alert-card');
-            serverAlerts.forEach(alert => {
-                setTimeout(() => {
-                    alert.style.display = 'none';
-                }, 5000);
-            });
-        });
-    </script>
 {% endblock %}

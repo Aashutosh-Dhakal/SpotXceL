@@ -1,0 +1,234 @@
+.parking-settings-form {
+    display: grid;
+    gap: 16px;
+}
+
+.parking-settings-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+}
+
+.vehicle-fee-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.settings-card {
+    background: #fff;
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+    padding: 18px 20px;
+    box-shadow: 0 1px 0 rgba(17, 24, 39, 0.02);
+}
+
+.settings-card-accent {
+    border-top: 1px solid #E5E7EB;
+}
+
+.settings-section-header {
+    margin-bottom: 16px;
+}
+
+.settings-section-header h2 {
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: #1F2937;
+    margin: 0 0 4px;
+}
+
+.settings-section-header p {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: #6B7280;
+}
+
+.vehicle-fee-card {
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+    padding: 16px;
+    background: linear-gradient(180deg, #FFFFFF 0%, #FCFCFD 100%);
+    display: grid;
+    gap: 14px;
+}
+
+.vehicle-fee-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.vehicle-fee-card-header h3 {
+    margin: 0;
+    font-size: 0.9375rem;
+    font-weight: 800;
+    color: #111827;
+}
+
+.vehicle-fee-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px 9px;
+    border-radius: 999px;
+    background: #FFF7ED;
+    color: #C2410C;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.fee-summary-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    border-top: 1px solid #E5E7EB;
+    padding-top: 12px;
+    color: #6B7280;
+    font-size: 0.8125rem;
+}
+
+.fee-summary-row strong {
+    color: #111827;
+    font-weight: 700;
+}
+
+.settings-section-divider {
+    display: none;
+}
+
+.parking-fee-grid {
+    grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr);
+    align-items: end;
+}
+
+.confidence-grid {
+    grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr) minmax(210px, 0.9fr);
+    align-items: end;
+}
+
+.fee-summary-chip {
+    background: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    border-radius: 4px;
+    color: #fff;
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+}
+
+.fee-summary-chip span {
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    opacity: 0.82;
+}
+
+.fee-summary-chip strong {
+    font-size: 1rem;
+}
+
+.confidence-summary {
+    display: grid;
+    gap: 8px;
+}
+
+.confidence-summary-chip {
+    background: #F9FAFB;
+    border: 1px solid #E5E7EB;
+    border-radius: 4px;
+    padding: 10px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.confidence-summary-chip span {
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #6B7280;
+    font-weight: 700;
+}
+
+.confidence-summary-chip strong {
+    font-size: 0.9375rem;
+    color: #111827;
+}
+
+.settings-actions-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 2px 0;
+}
+
+.settings-actions-right {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 12px;
+}
+
+.btn-save-settings {
+    min-width: 160px;
+}
+
+.filter-item select {
+    width: 100%;
+    padding: 9px 12px 9px 34px;
+    border: 1px solid #D1D5DB;
+    border-radius: 3px;
+    font-size: 0.8125rem;
+    color: #1F2937;
+    background: #fff;
+    font-family: inherit;
+}
+
+.filter-item select:focus {
+    outline: none;
+    border-color: #EA580C;
+    box-shadow: 0 0 0 2px rgba(234, 88, 12, 0.1);
+}
+
+.fee-hint {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: #6B7280;
+}
+
+@media (max-width: 1024px) {
+    .parking-settings-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .vehicle-fee-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .parking-fee-grid,
+    .confidence-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .settings-actions-bar {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .settings-actions-right {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .fee-summary-chip {
+        align-items: flex-start;
+    }
+}
